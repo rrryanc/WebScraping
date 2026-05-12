@@ -209,7 +209,8 @@
       text-align: center;
       margin-top: 14px;
     }
-    .pricing-source a { color: #9ca3af; }
+    .pricing-source a { color: #9ca3af; text-decoration: none; }
+    .pricing-source a:hover { text-decoration: underline; }
 
     /* ── Tier tooltip table (collapsible) ── */
     .tier-toggle {
@@ -423,7 +424,8 @@
 <script>
   // ── Tiered credit calculation ──
   // Each tier: { size: units in this tier (Infinity for last), rate: credits per unit }
-  // Loaded from pricing-data.json at runtime; these hardcoded values are the fallback.
+  /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: 2026-05-12 */
+  const PRICING_LAST_UPDATED = '2026-05-12';
   let TIERS = {
     indexing: [
       { size: 1,        rate: 0  },
@@ -455,6 +457,7 @@
       { size: Infinity, rate: 26 },
     ],
   };
+  /* PRICING:END */
 
   function calcTiered(qty, tiers) {
     let credits = 0, remaining = qty;
@@ -585,31 +588,33 @@
       : btn.textContent.replace('▾','▸');
   }
 
+  // ── Pre-fill inputs from URL hash ──
+  // Share a pre-configured link like:
+  // calculator.html#init=1500&indexing=1500&query=175&bw=8.33&storage=0&allotment=23402&discount=10
+  (function () {
+    const p = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const map = {
+      init:      ['n-init',      's-init'],
+      indexing:  ['n-indexing',  's-indexing'],
+      query:     ['n-query',     's-query'],
+      bw:        ['n-bandwidth', 's-bandwidth'],
+      storage:   ['n-storage',   's-storage'],
+      allotment: ['creditAllotment'],
+      discount:  ['discount'],
+    };
+    for (const [key, ids] of Object.entries(map)) {
+      const val = p.get(key);
+      if (val === null) continue;
+      ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = val; });
+    }
+    ['s-init','s-indexing','s-query','s-bandwidth','s-storage']
+      .forEach(id => updateTrack(document.getElementById(id)));
+  })();
+
   recalc();
 
-  // ── Load live pricing from pricing-data.json ──
-  (async () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-    try {
-      const resp = await fetch('./pricing-data.json', { signal: controller.signal });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      for (const key of Object.keys(data.tiers)) {
-        TIERS[key] = data.tiers[key].map(t => ({
-          size: t.size === null ? Infinity : t.size,
-          rate: t.rate,
-        }));
-      }
-      recalc();
-      const src = document.getElementById('pricing-source');
-      src.innerHTML = `Rates as of ${data.lastUpdated} · <a href="${data.source}" target="_blank" rel="noopener">source</a>`;
-    } catch {
-      // silently use hardcoded fallback
-    } finally {
-      clearTimeout(timer);
-    }
-  })();
+  document.getElementById('pricing-source').innerHTML =
+    `Rates as of ${PRICING_LAST_UPDATED} · <a href="https://foxglove.dev/pricing" target="_blank" rel="noopener">foxglove.dev/pricing</a>`;
 </script>
 </body>
 </html>

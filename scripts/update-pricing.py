@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-Fetch pricing.mdx from foxglove/app and regenerate pricing-data.json.
+Fetch pricing.mdx from foxglove/app and update the PRICING:START…PRICING:END
+block in mockup.html in-place.
+
 Requires FOXGLOVE_GITHUB_TOKEN env var with read access to foxglove/app.
 """
 import json
 import os
 import re
 import sys
-from datetime import date, timezone
+from datetime import date
 from urllib.request import urlopen, Request
 from urllib.error import HTTPError
 
-REPO   = "foxglove/app"
-PATH   = "packages/docs/docs/pricing.mdx"
-BRANCH = "main"
-OUT    = os.path.join(os.path.dirname(__file__), "..", "pricing-data.json")
+REPO     = "foxglove/app"
+PATH     = "packages/docs/docs/pricing.mdx"
+BRANCH   = "main"
+HTML_OUT = os.path.join(os.path.dirname(__file__), "..", "mockup.html")
 
 SECTION_MAP = {
     "Storage":   "storage",
@@ -22,6 +24,7 @@ SECTION_MAP = {
     "Indexing":  "indexing",
     "Bandwidth": "bandwidth",
 }
+KEY_ORDER = ["indexing", "query", "bandwidth", "storage"]
 
 
 def fetch_mdx(token):
@@ -54,7 +57,7 @@ def parse_tables(mdx):
 
 
 def to_tb(val, unit):
-    return val / 1000 if unit.lower() in ('gb',) else val
+    return val / 1000 if unit.lower() == 'gb' else val
 
 
 def parse_tier(range_str, rate_str, section):
@@ -100,14 +103,33 @@ def parse_tier(range_str, rate_str, section):
     raise ValueError(f"Unrecognised range format: {range_str!r}")
 
 
-def build(tables):
+def build_tiers(tables):
     tiers = {}
     for section, key in SECTION_MAP.items():
         if section not in tables:
-            print(f"WARNING: section '{section}' not found in MDX", file=sys.stderr)
+            print(f"WARNING: section '{section}' not found", file=sys.stderr)
             continue
-        tiers[key] = [parse_tier(row[0], row[1], section) for row in tables[section] if len(row) >= 2]
+        tiers[key] = [parse_tier(r[0], r[1], section) for r in tables[section] if len(r) >= 2]
     return tiers
+
+
+def format_js_block(tiers, last_updated):
+    lines = [
+        f"  /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: {last_updated} */",
+        f"  const PRICING_LAST_UPDATED = '{last_updated}';",
+        "  let TIERS = {",
+    ]
+    for key in KEY_ORDER:
+        if key not in tiers:
+            continue
+        lines.append(f"    {key}: [")
+        for t in tiers[key]:
+            size = "Infinity" if t["size"] is None else t["size"]
+            lines.append(f"      {{ size: {size}, rate: {t['rate']} }},")
+        lines.append("    ],")
+    lines.append("  };")
+    lines.append("  /* PRICING:END */")
+    return "\n".join(lines)
 
 
 def main():
@@ -121,20 +143,20 @@ def main():
     except HTTPError as e:
         sys.exit(f"GitHub API error: {e.code} {e.reason}")
 
-    tables = parse_tables(mdx)
-    tiers  = build(tables)
+    tiers       = build_tiers(parse_tables(mdx))
+    last_updated = date.today().isoformat()
+    new_block   = format_js_block(tiers, last_updated)
 
-    data = {
-        "lastUpdated": date.today().isoformat(),
-        "source": f"https://github.com/{REPO}/blob/{BRANCH}/{PATH}",
-        "tiers": tiers,
-    }
+    html_path = os.path.realpath(HTML_OUT)
+    html = open(html_path).read()
+    html_new = re.sub(r'/\* PRICING:START.*?PRICING:END \*/', new_block, html, flags=re.DOTALL)
 
-    out_path = os.path.realpath(OUT)
-    with open(out_path, "w") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-    print(f"Written to {out_path}", file=sys.stderr)
+    if html_new == html:
+        print("Pricing unchanged — no update needed.", file=sys.stderr)
+        return
+
+    open(html_path, 'w').write(html_new)
+    print(f"Updated {html_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

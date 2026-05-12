@@ -23,6 +23,6 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pricing-data.json
+          git add mockup.html
           git diff --staged --quiet && echo "No pricing changes." || \
-            git commit -m "Update pricing data from foxglove/app" && git push
+            git commit -m "Update pricing rates from foxglove/app" && git push
