@@ -9,453 +9,456 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-      background: #0c0e12;
-      color: #e2e8f0;
+      background: #eeeef3;
+      color: #111;
       min-height: 100vh;
-      padding: 64px 24px;
+      padding: 64px 32px;
     }
 
     .container {
-      max-width: 900px;
+      max-width: 1100px;
       margin: 0 auto;
     }
 
-    /* ── Header ── */
-    .header {
-      text-align: center;
-      margin-bottom: 56px;
-    }
-    .header h1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      color: #f8fafc;
-      margin-bottom: 12px;
-    }
-    .header p {
-      font-size: 1.05rem;
-      color: #94a3b8;
-      max-width: 520px;
-      margin: 0 auto;
-      line-height: 1.65;
-    }
-
-    /* ── Card shell ── */
-    .calc-card {
-      background: #141720;
-      border: 1px solid #1e2535;
-      border-radius: 16px;
-      overflow: hidden;
-    }
-
-    /* ── Two-column body ── */
-    .calc-body {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0;
-    }
-
-    /* ── Inputs panel ── */
-    .inputs-panel {
-      padding: 36px 40px;
-      border-right: 1px solid #1e2535;
-    }
-    .panel-label {
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #64748b;
-      margin-bottom: 24px;
-    }
-
-    .input-group {
+    h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #111;
       margin-bottom: 28px;
     }
-    .input-group label {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      font-size: 0.875rem;
-      color: #cbd5e1;
-      margin-bottom: 10px;
-      font-weight: 500;
-    }
-    .input-group label span.unit {
-      font-size: 0.75rem;
-      color: #475569;
-      font-weight: 400;
+
+    /* ── Two-column layout ── */
+    .calc-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
     }
 
-    /* Slider */
-    .slider-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    /* ── Card base ── */
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 32px 36px;
     }
-    input[type="range"] {
-      -webkit-appearance: none;
-      flex: 1;
-      height: 4px;
-      background: #1e2d3d;
-      border-radius: 2px;
-      outline: none;
-      cursor: pointer;
+
+    /* ── Left card: inputs ── */
+
+    /* Top row: two number fields */
+    .top-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
     }
-    input[type="range"]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: #6366f1;
-      border: 2px solid #818cf8;
-      cursor: pointer;
-      box-shadow: 0 0 0 4px rgba(99,102,241,0.15);
-    }
-    .slider-value {
-      min-width: 52px;
-      text-align: right;
-      font-size: 0.875rem;
+    .field-group label {
+      display: block;
+      font-size: 0.85rem;
       font-weight: 600;
-      color: #e2e8f0;
-      background: #1e2535;
-      border: 1px solid #2d3748;
-      border-radius: 6px;
-      padding: 4px 8px;
+      color: #222;
+      margin-bottom: 8px;
     }
+    .field-group input[type="number"] {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      color: #111;
+      background: #fff;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .field-group input[type="number"]:focus { border-color: #6b5cf6; }
 
     .divider {
       height: 1px;
-      background: #1e2535;
-      margin: 8px 0 28px;
+      background: #e5e7eb;
+      margin: 8px 0 24px;
     }
 
-    /* Discount / credit inputs — numeric text fields */
-    .text-input-group {
-      margin-bottom: 24px;
+    .section-label {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 20px;
     }
-    .text-input-group label {
-      display: block;
+
+    /* Slider rows */
+    .slider-group {
+      display: grid;
+      grid-template-columns: 140px 1fr 96px;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .slider-group .slider-label {
       font-size: 0.875rem;
-      color: #cbd5e1;
-      margin-bottom: 8px;
-      font-weight: 500;
+      color: #444;
     }
-    .text-input-row {
+
+    /* Custom slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+      /* filled left portion via JS background update */
+      background: linear-gradient(to right, #6b5cf6 0%, #6b5cf6 50%, #d1d5db 50%, #d1d5db 100%);
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #6b5cf6;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 1.5px #6b5cf6, 0 2px 6px rgba(107,92,246,0.3);
+      cursor: pointer;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #6b5cf6;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 1.5px #6b5cf6;
+      cursor: pointer;
+    }
+
+    .slider-number {
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      color: #111;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      outline: none;
+      font-family: inherit;
+      text-align: right;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+    .slider-number:focus { border-color: #6b5cf6; }
+
+    /* Additional inputs below sliders */
+    .extra-inputs {
+      margin-top: 8px;
+    }
+    .extra-row {
+      display: grid;
+      grid-template-columns: 140px 1fr 96px;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .extra-row .extra-label {
+      font-size: 0.875rem;
+      color: #444;
+    }
+    .extra-row .input-with-suffix {
       display: flex;
       align-items: center;
-      background: #1e2535;
-      border: 1px solid #2d3748;
+      border: 1.5px solid #d1d5db;
       border-radius: 8px;
       overflow: hidden;
+      grid-column: 2 / 4;
+      transition: border-color 0.15s;
     }
-    .text-input-row .prefix {
-      padding: 10px 12px;
-      color: #64748b;
-      font-size: 0.875rem;
-      border-right: 1px solid #2d3748;
-    }
-    .text-input-row input[type="number"] {
+    .extra-row .input-with-suffix:focus-within { border-color: #6b5cf6; }
+    .extra-row .input-with-suffix input {
       flex: 1;
-      background: transparent;
       border: none;
       outline: none;
-      color: #e2e8f0;
-      font-size: 0.9rem;
-      padding: 10px 12px;
       font-family: inherit;
+      font-size: 0.9rem;
+      padding: 8px 12px;
+      color: #111;
     }
-    .text-input-row .suffix {
-      padding: 10px 12px;
-      color: #64748b;
-      font-size: 0.8rem;
-      border-left: 1px solid #2d3748;
-    }
-
-    /* ── Summary panel ── */
-    .summary-panel {
-      padding: 36px 40px;
-      display: flex;
-      flex-direction: column;
+    .extra-row .input-with-suffix .sfx {
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      background: #f9fafb;
+      border-left: 1px solid #e5e7eb;
     }
 
-    .summary-section {
-      margin-bottom: 28px;
-    }
-    .summary-section-title {
-      font-size: 0.7rem;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: #64748b;
-      margin-bottom: 16px;
+    /* ── Right card: summary ── */
+    .summary-card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 28px 32px;
     }
 
-    .line-item {
+    .summary-card h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 24px;
+    }
+
+    .cost-line {
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      margin-bottom: 10px;
+      margin-bottom: 14px;
     }
-    .line-item .item-name {
-      font-size: 0.875rem;
-      color: #94a3b8;
+    .cost-line .cost-name {
+      font-size: 0.9rem;
+      color: #6b7280;
     }
-    .line-item .item-credits {
-      font-size: 0.875rem;
-      color: #e2e8f0;
+    .cost-line .cost-value {
+      font-size: 0.9rem;
+      color: #111;
       font-weight: 500;
     }
-    .line-item.subtotal .item-name {
-      color: #cbd5e1;
-      font-weight: 600;
-    }
-    .line-item.subtotal .item-credits {
-      color: #f8fafc;
-      font-weight: 700;
+    .cost-line .cost-value.credit {
+      color: #16a34a;
     }
 
     .summary-divider {
       height: 1px;
-      background: #1e2535;
+      background: #e5e7eb;
       margin: 8px 0 16px;
     }
 
-    /* Total price box */
-    .total-box {
-      background: linear-gradient(135deg, #1a1f35 0%, #141720 100%);
-      border: 1px solid #312e81;
-      border-radius: 12px;
-      padding: 24px;
-      margin-top: auto;
-      position: relative;
-      overflow: hidden;
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 28px;
     }
-    .total-box::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: radial-gradient(ellipse at top left, rgba(99,102,241,0.12) 0%, transparent 60%);
-      pointer-events: none;
+    .total-row .total-label {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #111;
     }
-    .total-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: #818cf8;
-      margin-bottom: 8px;
-    }
-    .total-amount {
-      font-size: 2.75rem;
+    .total-row .total-amount {
+      font-size: 2rem;
       font-weight: 800;
-      color: #f8fafc;
-      letter-spacing: -0.04em;
-      line-height: 1;
-      margin-bottom: 4px;
+      color: #111;
+      letter-spacing: -0.03em;
     }
-    .total-period {
-      font-size: 0.8rem;
-      color: #64748b;
-      margin-bottom: 20px;
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
-    .discount-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: rgba(99,102,241,0.15);
-      border: 1px solid rgba(99,102,241,0.3);
-      border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 0.75rem;
-      color: #818cf8;
-      font-weight: 600;
-      margin-bottom: 20px;
-    }
-    .cta-btn {
-      display: block;
-      width: 100%;
-      padding: 12px 20px;
-      background: #6366f1;
-      color: #fff;
-      border: none;
+    .btn {
+      padding: 11px 16px;
       border-radius: 8px;
-      font-size: 0.9rem;
+      font-size: 0.875rem;
       font-weight: 600;
       cursor: pointer;
       text-align: center;
-      letter-spacing: 0.01em;
-      transition: background 0.15s;
+      font-family: inherit;
+      transition: all 0.15s;
     }
-    .cta-btn:hover { background: #4f46e5; }
+    .btn-outline {
+      background: #fff;
+      border: 1.5px solid #d1d5db;
+      color: #111;
+    }
+    .btn-outline:hover { border-color: #9ca3af; background: #f9fafb; }
+    .btn-primary {
+      background: #6b5cf6;
+      border: 1.5px solid #6b5cf6;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #5b4de0; border-color: #5b4de0; }
 
-    /* ── Footer note ── */
-    .calc-footer {
-      border-top: 1px solid #1e2535;
-      padding: 16px 40px;
+    /* discount note */
+    .discount-note {
       font-size: 0.78rem;
-      color: #475569;
+      color: #16a34a;
+      margin-top: 12px;
       text-align: center;
     }
-    .calc-footer a { color: #6366f1; text-decoration: none; }
 
-    /* ── Responsive ── */
-    @media (max-width: 680px) {
-      .calc-body { grid-template-columns: 1fr; }
-      .inputs-panel { border-right: none; border-bottom: 1px solid #1e2535; }
+    @media (max-width: 760px) {
+      .calc-layout { grid-template-columns: 1fr; }
+      .slider-group { grid-template-columns: 120px 1fr 80px; }
     }
   </style>
 </head>
 <body>
   <div class="container">
+    <h1>Cost calculator</h1>
 
-    <div class="header">
-      <h1>Estimate your cost</h1>
-      <p>Adjust the sliders to match your expected usage and see how credits convert to monthly spend.</p>
-    </div>
+    <div class="calc-layout">
 
-    <div class="calc-card">
-      <div class="calc-body">
-
-        <!-- ── LEFT: Inputs ── -->
-        <div class="inputs-panel">
-          <div class="panel-label">Usage inputs</div>
-
-          <div class="input-group">
-            <label>Initial Indexing <span class="unit">TB</span></label>
-            <div class="slider-row">
-              <input type="range" min="0" max="100" value="10" />
-              <div class="slider-value">10</div>
-            </div>
+      <!-- ── LEFT: Inputs ── -->
+      <div class="card">
+        <div class="top-inputs">
+          <div class="field-group">
+            <label>Initial Indexing (TB)</label>
+            <input type="number" id="initialIndexing" value="10" min="0" />
           </div>
-
-          <div class="input-group">
-            <label>Monthly Indexing <span class="unit">TB / mo</span></label>
-            <div class="slider-row">
-              <input type="range" min="0" max="50" value="5" />
-              <div class="slider-value">5</div>
-            </div>
-          </div>
-
-          <div class="input-group">
-            <label>Monthly Query <span class="unit">hrs / mo</span></label>
-            <div class="slider-row">
-              <input type="range" min="0" max="500" value="40" />
-              <div class="slider-value">40</div>
-            </div>
-          </div>
-
-          <div class="input-group">
-            <label>Monthly Bandwidth <span class="unit">TB / mo</span></label>
-            <div class="slider-row">
-              <input type="range" min="0" max="50" value="8" />
-              <div class="slider-value">8</div>
-            </div>
-          </div>
-
-          <div class="input-group">
-            <label>Monthly Storage <span class="unit">TB / mo</span></label>
-            <div class="slider-row">
-              <input type="range" min="0" max="200" value="25" />
-              <div class="slider-value">25</div>
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="text-input-group">
+          <div class="field-group">
             <label>1-time Credit Allotment</label>
-            <div class="text-input-row">
-              <span class="prefix">CR</span>
-              <input type="number" value="500" placeholder="0" />
-            </div>
-          </div>
-
-          <div class="text-input-group">
-            <label>Advance Purchase Discount</label>
-            <div class="text-input-row">
-              <input type="number" value="10" placeholder="0" min="0" max="100" />
-              <span class="suffix">%</span>
-            </div>
+            <input type="number" id="creditAllotment" value="500" min="0" />
           </div>
         </div>
 
-        <!-- ── RIGHT: Summary ── -->
-        <div class="summary-panel">
-          <div class="panel-label">Cost breakdown</div>
+        <div class="divider"></div>
+        <div class="section-label">Monthly Usage</div>
 
-          <div class="summary-section">
-            <div class="summary-section-title">One-time</div>
-            <div class="line-item">
-              <span class="item-name">Initial indexing (10 TB)</span>
-              <span class="item-credits">250 CR</span>
-            </div>
-            <div class="line-item">
-              <span class="item-name">Credit allotment</span>
-              <span class="item-credits">−500 CR</span>
-            </div>
-            <div class="summary-divider"></div>
-            <div class="line-item subtotal">
-              <span class="item-name">One-time net</span>
-              <span class="item-credits">−250 CR</span>
-            </div>
-          </div>
-
-          <div class="summary-section">
-            <div class="summary-section-title">Monthly recurring</div>
-            <div class="line-item">
-              <span class="item-name">Indexing (5 TB)</span>
-              <span class="item-credits">125 CR</span>
-            </div>
-            <div class="line-item">
-              <span class="item-name">Query (40 hrs)</span>
-              <span class="item-credits">200 CR</span>
-            </div>
-            <div class="line-item">
-              <span class="item-name">Bandwidth (8 TB)</span>
-              <span class="item-credits">80 CR</span>
-            </div>
-            <div class="line-item">
-              <span class="item-name">Storage (25 TB)</span>
-              <span class="item-credits">250 CR</span>
-            </div>
-            <div class="summary-divider"></div>
-            <div class="line-item subtotal">
-              <span class="item-name">Subtotal</span>
-              <span class="item-credits">655 CR / mo</span>
-            </div>
-          </div>
-
-          <div class="total-box">
-            <div class="total-label">Estimated monthly</div>
-            <div class="total-amount">$5,895</div>
-            <div class="total-period">per month · after 10% advance discount</div>
-            <div class="discount-badge">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <circle cx="5" cy="5" r="4" stroke="#818cf8" stroke-width="1.5"/>
-                <path d="M3 5l1.5 1.5L7 3.5" stroke="#818cf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Saving $655 / mo with advance purchase
-            </div>
-            <button class="cta-btn">Talk to sales →</button>
-          </div>
+        <div class="slider-group">
+          <span class="slider-label">Indexing (TB)</span>
+          <input type="range" id="s-indexing" min="0" max="500" value="5" />
+          <input type="number" class="slider-number" id="n-indexing" value="5" min="0" max="500" />
         </div>
 
+        <div class="slider-group">
+          <span class="slider-label">Query (hours)</span>
+          <input type="range" id="s-query" min="0" max="500" value="40" />
+          <input type="number" class="slider-number" id="n-query" value="40" min="0" max="500" />
+        </div>
+
+        <div class="slider-group">
+          <span class="slider-label">Bandwidth (TB)</span>
+          <input type="range" id="s-bandwidth" min="0" max="200" value="8" />
+          <input type="number" class="slider-number" id="n-bandwidth" value="8" min="0" max="200" />
+        </div>
+
+        <div class="slider-group">
+          <span class="slider-label">Storage (TB)</span>
+          <input type="range" id="s-storage" min="0" max="500" value="25" />
+          <input type="number" class="slider-number" id="n-storage" value="25" min="0" max="500" />
+        </div>
+
+        <div class="divider" style="margin-top:8px;"></div>
+
+        <div class="extra-inputs">
+          <div class="extra-row">
+            <span class="extra-label">Advance Purchase Discount</span>
+            <div class="input-with-suffix">
+              <input type="number" id="discount" value="10" min="0" max="100" />
+              <span class="sfx">%</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="calc-footer">
-        Prices shown are estimates. Actual billing depends on measured usage. <a href="#">View full pricing details</a>.
+      <!-- ── RIGHT: Summary ── -->
+      <div class="summary-card">
+        <h2>Estimated Monthly Costs</h2>
+
+        <div class="cost-line">
+          <span class="cost-name">Indexing</span>
+          <span class="cost-value" id="out-indexing">$125</span>
+        </div>
+        <div class="cost-line">
+          <span class="cost-name">Query</span>
+          <span class="cost-value" id="out-query">$400</span>
+        </div>
+        <div class="cost-line">
+          <span class="cost-name">Bandwidth</span>
+          <span class="cost-value" id="out-bandwidth">$80</span>
+        </div>
+        <div class="cost-line">
+          <span class="cost-name">Storage</span>
+          <span class="cost-value" id="out-storage">$250</span>
+        </div>
+        <div class="cost-line">
+          <span class="cost-name">1-time credit (amortized)</span>
+          <span class="cost-value credit" id="out-credit">−$500</span>
+        </div>
+
+        <div class="summary-divider"></div>
+
+        <div class="total-row">
+          <span class="total-label">Total</span>
+          <span class="total-amount" id="out-total">$297</span>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-outline">Contact sales</button>
+          <button class="btn btn-primary">Get started</button>
+        </div>
+
+        <div class="discount-note" id="discount-note">Saving 10% with advance purchase</div>
       </div>
+
     </div>
-
   </div>
 
   <script>
-    // Wire up sliders to live-update their value badge
-    document.querySelectorAll('input[type="range"]').forEach(slider => {
-      const badge = slider.closest('.slider-row').querySelector('.slider-value');
-      slider.addEventListener('input', () => { badge.textContent = slider.value; });
+    // ── Placeholder rates (swap for real spreadsheet values) ──
+    const RATES = {
+      indexing:  25,   // $ per TB / mo
+      query:     10,   // $ per hour / mo
+      bandwidth: 10,   // $ per TB / mo
+      storage:   10,   // $ per TB / mo
+    };
+
+    function fmt(n) {
+      return '$' + Math.max(0, Math.round(n)).toLocaleString();
+    }
+
+    function recalc() {
+      const indexing  = +document.getElementById('n-indexing').value;
+      const query     = +document.getElementById('n-query').value;
+      const bandwidth = +document.getElementById('n-bandwidth').value;
+      const storage   = +document.getElementById('n-storage').value;
+      const credit    = +document.getElementById('creditAllotment').value;
+      const discount  = +document.getElementById('discount').value / 100;
+
+      const rawIndexing  = indexing  * RATES.indexing;
+      const rawQuery     = query     * RATES.query;
+      const rawBandwidth = bandwidth * RATES.bandwidth;
+      const rawStorage   = storage   * RATES.storage;
+
+      const subtotal = (rawIndexing + rawQuery + rawBandwidth + rawStorage) * (1 - discount);
+      const total    = Math.max(0, subtotal - credit);
+
+      document.getElementById('out-indexing').textContent  = fmt(rawIndexing * (1 - discount));
+      document.getElementById('out-query').textContent     = fmt(rawQuery * (1 - discount));
+      document.getElementById('out-bandwidth').textContent = fmt(rawBandwidth * (1 - discount));
+      document.getElementById('out-storage').textContent   = fmt(rawStorage * (1 - discount));
+      document.getElementById('out-credit').textContent    = '−' + fmt(credit);
+      document.getElementById('out-total').textContent     = fmt(total);
+
+      const pct = Math.round(discount * 100);
+      const note = document.getElementById('discount-note');
+      note.style.display = pct > 0 ? 'block' : 'none';
+      note.textContent = `Saving ${pct}% with advance purchase`;
+    }
+
+    // Sync sliders ↔ number inputs + update track fill
+    function updateTrack(slider) {
+      const pct = (slider.value - slider.min) / (slider.max - slider.min) * 100;
+      slider.style.background = `linear-gradient(to right, #6b5cf6 ${pct}%, #6b5cf6 ${pct}%, #d1d5db ${pct}%, #d1d5db 100%)`;
+    }
+
+    [['s-indexing','n-indexing'], ['s-query','n-query'],
+     ['s-bandwidth','n-bandwidth'], ['s-storage','n-storage']].forEach(([sid, nid]) => {
+      const slider = document.getElementById(sid);
+      const num    = document.getElementById(nid);
+
+      updateTrack(slider);
+
+      slider.addEventListener('input', () => {
+        num.value = slider.value;
+        updateTrack(slider);
+        recalc();
+      });
+      num.addEventListener('input', () => {
+        slider.value = num.value;
+        updateTrack(slider);
+        recalc();
+      });
     });
+
+    ['creditAllotment', 'discount', 'initialIndexing'].forEach(id => {
+      document.getElementById(id).addEventListener('input', recalc);
+    });
+
+    recalc();
   </script>
 </body>
 </html>
