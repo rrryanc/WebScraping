@@ -280,15 +280,10 @@
         <input type="number" class="slider-number" id="n-query" value="175" min="0" />
       </div>
 
-      <button class="tier-toggle" onclick="toggleTier('tier-query')">▸ Show query tiers</button>
+      <button class="tier-toggle" onclick="toggleTier('tier-query')">▸ Show tier breakdown</button>
       <table class="tier-table" id="tier-query">
-        <tr><th>Tier</th><th>Rate (credits/hr)</th></tr>
-        <tr><td>0–1 hr</td><td>0</td></tr>
-        <tr><td>1–10 hr</td><td>3.65</td></tr>
-        <tr><td>10–100 hr</td><td>2.75</td></tr>
-        <tr><td>100–500 hr</td><td>2.35</td></tr>
-        <tr><td>500–1,000 hr</td><td>2.15</td></tr>
-        <tr><td>1,000+ hr</td><td>2.05</td></tr>
+        <thead><tr><th>Tier</th><th>Rate</th><th>Hrs used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-query-body"></tbody>
       </table>
 
       <div class="slider-group">
@@ -297,14 +292,10 @@
         <input type="number" class="slider-number" id="n-bandwidth" value="8.33" min="0" step="0.1" />
       </div>
 
-      <button class="tier-toggle" onclick="toggleTier('tier-bw')">▸ Show bandwidth tiers</button>
+      <button class="tier-toggle" onclick="toggleTier('tier-bw')">▸ Show tier breakdown</button>
       <table class="tier-table" id="tier-bw">
-        <tr><th>Tier</th><th>Rate (credits/TB)</th></tr>
-        <tr><td>0–0.1 TB</td><td>0</td></tr>
-        <tr><td>0.1–10 TB</td><td>150</td></tr>
-        <tr><td>10–100 TB</td><td>135</td></tr>
-        <tr><td>100–1,000 TB</td><td>125</td></tr>
-        <tr><td>1,000+ TB</td><td>115</td></tr>
+        <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-bw-body"></tbody>
       </table>
 
       <div class="slider-group">
@@ -313,14 +304,10 @@
         <input type="number" class="slider-number" id="n-storage" value="0" min="0" />
       </div>
 
-      <button class="tier-toggle" onclick="toggleTier('tier-storage')">▸ Show storage tiers</button>
+      <button class="tier-toggle" onclick="toggleTier('tier-storage')">▸ Show tier breakdown</button>
       <table class="tier-table" id="tier-storage">
-        <tr><th>Tier</th><th>Rate (credits/TB)</th></tr>
-        <tr><td>0–1 TB</td><td>0</td></tr>
-        <tr><td>1–10 TB</td><td>50</td></tr>
-        <tr><td>10–100 TB</td><td>40</td></tr>
-        <tr><td>100–1,000 TB</td><td>30</td></tr>
-        <tr><td>1,000+ TB</td><td>26</td></tr>
+        <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-storage-body"></tbody>
       </table>
 
       <div class="divider"></div>
@@ -478,22 +465,29 @@
     return '$' + Math.round(n).toLocaleString();
   }
 
-  const INDEX_TIER_LABELS = ['0–1 TB', '1–10 TB', '10–100 TB', '100–1,000 TB', '1,000–100,000 TB'];
+  const TIER_META = {
+    indexing:  { labels: ['0–1 TB','1–10 TB','10–100 TB','100–1,000 TB','1,000–100,000 TB'], unit: 'TB' },
+    query:     { labels: ['0–1 hr','1–10 hr','10–100 hr','100–500 hr','500–1,000 hr','1,000+ hr'], unit: 'hr' },
+    bandwidth: { labels: ['0–0.1 TB','0.1–10 TB','10–100 TB','100–1,000 TB','1,000+ TB'], unit: 'TB' },
+    storage:   { labels: ['0–1 TB','1–10 TB','10–100 TB','100–1,000 TB','1,000+ TB'], unit: 'TB' },
+  };
 
-  function renderIndexingBreakdown(qty, tbodyId) {
+  function renderBreakdown(qty, tierKey, tbodyId) {
     const tbody = document.getElementById(tbodyId);
+    const { labels, unit } = TIER_META[tierKey];
     tbody.innerHTML = '';
     let remaining = qty;
-    TIERS.indexing.forEach(({ size, rate }, i) => {
-      const inTier = Math.min(remaining, size === Infinity ? remaining : size);
+    TIERS[tierKey].forEach(({ size, rate }, i) => {
+      const avail  = size === Infinity ? remaining : size;
+      const inTier = Math.min(remaining, avail);
       const credits = inTier * rate;
-      remaining = Math.max(0, remaining - (size === Infinity ? remaining : size));
+      remaining = Math.max(0, remaining - avail);
       const tr = document.createElement('tr');
       tr.className = inTier > 0 ? 'tier-active' : 'tier-zero';
       tr.innerHTML = `
-        <td>${INDEX_TIER_LABELS[i]}</td>
-        <td>${rate} cr/TB</td>
-        <td>${inTier > 0 ? inTier.toLocaleString() : '—'}</td>
+        <td>${labels[i]}</td>
+        <td>${rate} cr/${unit}</td>
+        <td>${inTier > 0 ? +inTier.toFixed(2).toLocaleString() : '—'}</td>
         <td>${credits > 0 ? Math.round(credits).toLocaleString() : '—'}</td>`;
       tbody.appendChild(tr);
     });
@@ -510,8 +504,11 @@
 
     const initCredits     = calcTiered(initTB,     TIERS.indexing);
     const indexingCredits = calcTiered(indexingTB, TIERS.indexing);
-    renderIndexingBreakdown(initTB,     'tier-init-body');
-    renderIndexingBreakdown(indexingTB, 'tier-monthly-body');
+    renderBreakdown(initTB,     'indexing',  'tier-init-body');
+    renderBreakdown(indexingTB, 'indexing',  'tier-monthly-body');
+    renderBreakdown(queryHrs,   'query',     'tier-query-body');
+    renderBreakdown(bwTB,       'bandwidth', 'tier-bw-body');
+    renderBreakdown(storageTB,  'storage',   'tier-storage-body');
     const queryCredits    = calcTiered(queryHrs,   TIERS.query);
     const bwCredits       = calcTiered(bwTB,       TIERS.bandwidth);
     const storageCredits  = calcTiered(storageTB,  TIERS.storage);
