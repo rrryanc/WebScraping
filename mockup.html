@@ -203,6 +203,14 @@
       text-align: center;
     }
 
+    .pricing-source {
+      font-size: 0.72rem;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 14px;
+    }
+    .pricing-source a { color: #9ca3af; }
+
     /* ── Tier tooltip table (collapsible) ── */
     .tier-toggle {
       font-size: 0.78rem;
@@ -406,6 +414,7 @@
         <button class="btn btn-primary">Get started</button>
       </div>
       <div class="discount-note" id="discount-note"></div>
+      <div class="pricing-source" id="pricing-source"></div>
     </div>
 
   </div>
@@ -414,7 +423,8 @@
 <script>
   // ── Tiered credit calculation ──
   // Each tier: { size: units in this tier (Infinity for last), rate: credits per unit }
-  const TIERS = {
+  // Loaded from pricing-data.json at runtime; these hardcoded values are the fallback.
+  let TIERS = {
     indexing: [
       { size: 1,        rate: 0  },
       { size: 9,        rate: 35 },
@@ -576,6 +586,30 @@
   }
 
   recalc();
+
+  // ── Load live pricing from pricing-data.json ──
+  (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    try {
+      const resp = await fetch('./pricing-data.json', { signal: controller.signal });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      for (const key of Object.keys(data.tiers)) {
+        TIERS[key] = data.tiers[key].map(t => ({
+          size: t.size === null ? Infinity : t.size,
+          rate: t.rate,
+        }));
+      }
+      recalc();
+      const src = document.getElementById('pricing-source');
+      src.innerHTML = `Rates as of ${data.lastUpdated} · <a href="${data.source}" target="_blank" rel="noopener">source</a>`;
+    } catch {
+      // silently use hardcoded fallback
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
 </script>
 </body>
 </html>

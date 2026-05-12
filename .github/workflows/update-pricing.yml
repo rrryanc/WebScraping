@@ -1,0 +1,28 @@
+name: Update pricing data
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # daily at 06:00 UTC
+  workflow_dispatch:        # allow manual runs
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate pricing-data.json
+        env:
+          FOXGLOVE_GITHUB_TOKEN: ${{ secrets.FOXGLOVE_GITHUB_TOKEN }}
+        run: python3 scripts/update-pricing.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pricing-data.json
+          git diff --staged --quiet && echo "No pricing changes." || \
+            git commit -m "Update pricing data from foxglove/app" && git push
