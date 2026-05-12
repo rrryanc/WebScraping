@@ -506,6 +506,19 @@
     });
   }
 
+  function updateHash() {
+    const params = new URLSearchParams({
+      init:      document.getElementById('n-init').value,
+      indexing:  document.getElementById('n-indexing').value,
+      query:     document.getElementById('n-query').value,
+      bw:        document.getElementById('n-bandwidth').value,
+      storage:   document.getElementById('n-storage').value,
+      allotment: document.getElementById('creditAllotment').value,
+      discount:  document.getElementById('discount').value,
+    });
+    history.replaceState(null, '', '#' + params.toString());
+  }
+
   function recalc() {
     const initTB     = +document.getElementById('n-init').value;
     const indexingTB = +document.getElementById('n-indexing').value;
@@ -555,6 +568,7 @@
     } else {
       note.style.display = 'none';
     }
+    updateHash();
   }
 
   // ── Slider ↔ number sync + track fill ──
