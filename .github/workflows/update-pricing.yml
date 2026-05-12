@@ -1,9 +1,11 @@
-name: Update pricing data
+name: Update pricing calculator
 
 on:
-  schedule:
-    - cron: '0 6 * * *'   # daily at 06:00 UTC
-  workflow_dispatch:        # allow manual runs
+  push:
+    branches: [main]
+    paths:
+      - 'packages/docs/docs/pricing.mdx'
+  workflow_dispatch:
 
 jobs:
   update:
@@ -14,15 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Regenerate pricing-data.json
-        env:
-          FOXGLOVE_GITHUB_TOKEN: ${{ secrets.FOXGLOVE_GITHUB_TOKEN }}
-        run: python3 scripts/update-pricing.py
+      - name: Regenerate pricing block in calculator
+        run: python3 packages/docs/scripts/update-pricing.py
 
       - name: Commit if changed
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add mockup.html
+          git add packages/docs/static/pricing-calculator.html
           git diff --staged --quiet && echo "No pricing changes." || \
-            git commit -m "Update pricing rates from foxglove/app" && git push
+            git commit -m "Update pricing calculator rates" && git push

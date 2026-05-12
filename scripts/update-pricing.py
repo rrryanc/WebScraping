@@ -1,22 +1,18 @@
 #!/usr/bin/env python3
 """
-Fetch pricing.mdx from foxglove/app and update the PRICING:START…PRICING:END
-block in mockup.html in-place.
+Read pricing.mdx and update the PRICING:START…PRICING:END block in
+pricing-calculator.html in-place.
 
-Requires FOXGLOVE_GITHUB_TOKEN env var with read access to foxglove/app.
+Run from the repo root:
+    python3 packages/docs/scripts/update-pricing.py
 """
-import json
 import os
 import re
 import sys
 from datetime import date
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError
 
-REPO     = "foxglove/app"
-PATH     = "packages/docs/docs/pricing.mdx"
-BRANCH   = "main"
-HTML_OUT = os.path.join(os.path.dirname(__file__), "..", "mockup.html")
+MDX_PATH  = "packages/docs/docs/pricing.mdx"
+HTML_PATH = "packages/docs/static/pricing-calculator.html"
 
 SECTION_MAP = {
     "Storage":   "storage",
@@ -25,17 +21,6 @@ SECTION_MAP = {
     "Bandwidth": "bandwidth",
 }
 KEY_ORDER = ["indexing", "query", "bandwidth", "storage"]
-
-
-def fetch_mdx(token):
-    url = f"https://api.github.com/repos/{REPO}/contents/{PATH}?ref={BRANCH}"
-    req = Request(url, headers={
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github.raw+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    })
-    with urlopen(req) as resp:
-        return resp.read().decode()
 
 
 def parse_tables(mdx):
@@ -72,8 +57,7 @@ def parse_tier(range_str, rate_str, section):
     m = re.match(r'First ([0-9.]+)\s*(\w+)', range_str, re.IGNORECASE)
     if m:
         val, unit = float(m.group(1)), m.group(2)
-        size = to_tb(val, unit) if is_data else val
-        return {"size": size, "rate": rate}
+        return {"size": to_tb(val, unit) if is_data else val, "rate": rate}
 
     # "X+ unit"  →  Infinity
     if re.match(r'[0-9.]+\+', range_str):
@@ -133,21 +117,17 @@ def format_js_block(tiers, last_updated):
 
 
 def main():
-    token = os.environ.get("FOXGLOVE_GITHUB_TOKEN", "")
-    if not token:
-        sys.exit("FOXGLOVE_GITHUB_TOKEN is not set")
+    root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    mdx_path  = os.path.realpath(os.path.join(root, MDX_PATH))
+    html_path = os.path.realpath(os.path.join(root, HTML_PATH))
 
-    print(f"Fetching {PATH} from {REPO}@{BRANCH}...", file=sys.stderr)
-    try:
-        mdx = fetch_mdx(token)
-    except HTTPError as e:
-        sys.exit(f"GitHub API error: {e.code} {e.reason}")
+    print(f"Reading {mdx_path}...", file=sys.stderr)
+    mdx = open(mdx_path).read()
 
-    tiers       = build_tiers(parse_tables(mdx))
+    tiers        = build_tiers(parse_tables(mdx))
     last_updated = date.today().isoformat()
-    new_block   = format_js_block(tiers, last_updated)
+    new_block    = format_js_block(tiers, last_updated)
 
-    html_path = os.path.realpath(HTML_OUT)
     html = open(html_path).read()
     html_new = re.sub(r'/\* PRICING:START.*?PRICING:END \*/', new_block, html, flags=re.DOTALL)
 
