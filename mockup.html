@@ -227,6 +227,8 @@
     }
     .tier-table th { color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
     .tier-table td:first-child, .tier-table th:first-child { text-align: left; }
+    .tier-table tr.tier-active td { color: #111; }
+    .tier-table tr.tier-zero td { color: #d1d5db; }
 
     @media (max-width: 760px) {
       .calc-layout { grid-template-columns: 1fr; }
@@ -247,18 +249,12 @@
       <div class="section-label">One-time</div>
       <div class="slider-group">
         <span class="slider-label">Initial Indexing (TB)</span>
-        <input type="range" id="s-init" min="0" max="2000" step="1" value="1500" />
-        <input type="number" class="slider-number" id="n-init" value="1500" min="0" />
+        <input type="range" id="s-init" min="0" max="100000" step="1" value="1500" />
+        <input type="number" class="slider-number" id="n-init" value="1500" min="0" max="100000" />
       </div>
-
-      <button class="tier-toggle" onclick="toggleTier('tier-index')">▸ Show indexing tiers</button>
-      <table class="tier-table" id="tier-index">
-        <tr><th>Tier</th><th>Rate (credits/TB)</th></tr>
-        <tr><td>0–1 TB</td><td>0</td></tr>
-        <tr><td>1–10 TB</td><td>35</td></tr>
-        <tr><td>10–100 TB</td><td>28</td></tr>
-        <tr><td>100–1,000 TB</td><td>24</td></tr>
-        <tr><td>1,000+ TB</td><td>22</td></tr>
+      <table class="tier-table open" id="tier-init-breakdown">
+        <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-init-body"></tbody>
       </table>
 
       <div class="divider"></div>
@@ -268,9 +264,13 @@
 
       <div class="slider-group">
         <span class="slider-label">Indexing (TB)</span>
-        <input type="range" id="s-indexing" min="0" max="2000" step="1" value="1500" />
-        <input type="number" class="slider-number" id="n-indexing" value="1500" min="0" />
+        <input type="range" id="s-indexing" min="0" max="100000" step="1" value="1500" />
+        <input type="number" class="slider-number" id="n-indexing" value="1500" min="0" max="100000" />
       </div>
+      <table class="tier-table open" id="tier-monthly-breakdown">
+        <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-monthly-body"></tbody>
+      </table>
 
       <div class="slider-group">
         <span class="slider-label">Query (hours)</span>
@@ -476,6 +476,27 @@
     return '$' + Math.round(n).toLocaleString();
   }
 
+  const INDEX_TIER_LABELS = ['0–1 TB', '1–10 TB', '10–100 TB', '100–1,000 TB', '1,000–100,000 TB'];
+
+  function renderIndexingBreakdown(qty, tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    tbody.innerHTML = '';
+    let remaining = qty;
+    TIERS.indexing.forEach(({ size, rate }, i) => {
+      const inTier = Math.min(remaining, size === Infinity ? remaining : size);
+      const credits = inTier * rate;
+      remaining = Math.max(0, remaining - (size === Infinity ? remaining : size));
+      const tr = document.createElement('tr');
+      tr.className = inTier > 0 ? 'tier-active' : 'tier-zero';
+      tr.innerHTML = `
+        <td>${INDEX_TIER_LABELS[i]}</td>
+        <td>${rate} cr/TB</td>
+        <td>${inTier > 0 ? inTier.toLocaleString() : '—'}</td>
+        <td>${credits > 0 ? Math.round(credits).toLocaleString() : '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
   function recalc() {
     const initTB     = +document.getElementById('n-init').value;
     const indexingTB = +document.getElementById('n-indexing').value;
@@ -487,6 +508,8 @@
 
     const initCredits     = calcTiered(initTB,     TIERS.indexing);
     const indexingCredits = calcTiered(indexingTB, TIERS.indexing);
+    renderIndexingBreakdown(initTB,     'tier-init-body');
+    renderIndexingBreakdown(indexingTB, 'tier-monthly-body');
     const queryCredits    = calcTiered(queryHrs,   TIERS.query);
     const bwCredits       = calcTiered(bwTB,       TIERS.bandwidth);
     const storageCredits  = calcTiered(storageTB,  TIERS.storage);
