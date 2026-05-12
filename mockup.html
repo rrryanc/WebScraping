@@ -252,7 +252,8 @@
         <input type="range" id="s-init" min="0" max="100000" step="1" value="1500" />
         <input type="number" class="slider-number" id="n-init" value="1500" min="0" max="100000" />
       </div>
-      <table class="tier-table open" id="tier-init-breakdown">
+      <button class="tier-toggle" onclick="toggleTier('tier-init-breakdown')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-init-breakdown">
         <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
         <tbody id="tier-init-body"></tbody>
       </table>
@@ -267,7 +268,8 @@
         <input type="range" id="s-indexing" min="0" max="100000" step="1" value="1500" />
         <input type="number" class="slider-number" id="n-indexing" value="1500" min="0" max="100000" />
       </div>
-      <table class="tier-table open" id="tier-monthly-breakdown">
+      <button class="tier-toggle" onclick="toggleTier('tier-monthly-breakdown')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-monthly-breakdown">
         <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
         <tbody id="tier-monthly-body"></tbody>
       </table>
