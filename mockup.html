@@ -395,11 +395,22 @@
 
       <div class="summary-divider"></div>
 
+      <div class="cost-line bold">
+        <span class="cost-name">Credits needed</span>
+        <span class="cost-value" id="out-credits-needed">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Price per credit</span>
+        <span class="cost-value" id="out-price-per-credit">$1.00</span>
+      </div>
+
+      <div class="summary-divider"></div>
+
       <div class="total-row">
-        <span class="total-label">Net Year 1</span>
+        <span class="total-label">Year 1 cost</span>
         <span class="total-amount" id="out-total">–</span>
       </div>
-      <div class="total-sub" id="out-total-sub">after allotment &amp; discount</div>
+      <div class="total-sub">credits × price per credit</div>
 
       <div class="btn-group">
         <button class="btn btn-outline">Contact sales</button>
@@ -461,6 +472,10 @@
     return Math.round(n).toLocaleString() + ' cr';
   }
 
+  function fmtDollars(n) {
+    return '$' + Math.round(n).toLocaleString();
+  }
+
   function recalc() {
     const initTB     = +document.getElementById('n-init').value;
     const indexingTB = +document.getElementById('n-indexing').value;
@@ -476,11 +491,13 @@
     const bwCredits       = calcTiered(bwTB,       TIERS.bandwidth);
     const storageCredits  = calcTiered(storageTB,  TIERS.storage);
 
-    const monthlyCredits = indexingCredits + queryCredits + bwCredits + storageCredits;
-    const annualCredits  = monthlyCredits * 12;
-    const year1Credits   = initCredits + annualCredits;
-    const afterAllotment = year1Credits - allotment;
-    const netYear1       = afterAllotment * (1 - discountPct);
+    const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits;
+    const annualCredits   = monthlyCredits * 12;
+    const year1Credits    = initCredits + annualCredits;
+    // Credits are the end output — discount only affects the dollar price per credit
+    const netCredits      = Math.max(0, year1Credits - allotment);
+    const dollarCost      = netCredits * (1 - discountPct);   // 1 credit = $1 at full price
+    const dollarSavings   = netCredits * discountPct;
 
     document.getElementById('out-init-credits').textContent = fmtCredits(initCredits);
     document.getElementById('out-allotment').textContent    = '−' + fmtCredits(allotment);
@@ -491,12 +508,14 @@
     document.getElementById('out-monthly').textContent      = fmtCredits(monthlyCredits);
     document.getElementById('out-annual').textContent       = fmtCredits(annualCredits);
     document.getElementById('out-year1').textContent        = fmtCredits(year1Credits);
-    document.getElementById('out-total').textContent        = fmtCredits(Math.max(0, netYear1));
+    document.getElementById('out-credits-needed').textContent   = fmtCredits(netCredits);
+    document.getElementById('out-price-per-credit').textContent = '$' + (1 - discountPct).toFixed(2);
+    document.getElementById('out-total').textContent             = fmtDollars(dollarCost);
 
     const pct = Math.round(discountPct * 100);
     const note = document.getElementById('discount-note');
     if (pct > 0) {
-      note.textContent = `Saving ${pct}% with advance purchase`;
+      note.textContent = `Saving ${fmtDollars(dollarSavings)} with ${pct}% advance purchase discount`;
       note.style.display = 'block';
     } else {
       note.style.display = 'none';
