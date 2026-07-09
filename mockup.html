@@ -331,7 +331,7 @@
       </div>
       <button class="tier-toggle" onclick="toggleTier('tier-devices')">▸ Show tier breakdown</button>
       <table class="tier-table" id="tier-devices">
-        <thead><tr><th>Tier</th><th>Rate</th><th>Devices</th><th>Credits</th></tr></thead>
+        <thead><tr><th>Tier</th><th>Rate</th><th>Devices</th><th>$</th></tr></thead>
         <tbody id="tier-devices-body"></tbody>
       </table>
 
@@ -436,6 +436,10 @@
         <span class="cost-name">Price per credit</span>
         <span class="cost-value" id="out-price-per-credit">$1.00</span>
       </div>
+      <div class="cost-line">
+        <span class="cost-name">Device fees (annual)</span>
+        <span class="cost-value" id="out-device-fees">–</span>
+      </div>
 
       <div class="summary-divider"></div>
 
@@ -443,7 +447,7 @@
         <span class="total-label">Year 1 cost</span>
         <span class="total-amount" id="out-total">–</span>
       </div>
-      <div class="total-sub">credits × price per credit</div>
+      <div class="total-sub">credits × price per credit + device fees</div>
 
       <div class="btn-group">
         <button class="btn btn-outline">Contact sales</button>
@@ -500,16 +504,19 @@
   };
   /* PRICING:END */
 
-  function renderFleetBreakdown(qty, tiers, labels, unit, tbodyId, multiplier) {
+  function renderFleetBreakdown(qty, tiers, labels, unit, tbodyId, multiplier, isDollars) {
     const tbody = document.getElementById(tbodyId);
     tbody.innerHTML = '';
     let remaining = qty;
     let perUnitTotal = 0;
+    const fmtAmt = isDollars
+      ? v => v > 0 ? '$' + Math.round(v).toLocaleString() : '—'
+      : v => v > 0 ? (v < 1 ? v.toFixed(2) : Math.round(v).toLocaleString()) : '—';
     tiers.forEach(({ size, rate }, i) => {
       const avail  = size === Infinity ? remaining : size;
       const inTier = Math.min(remaining, avail);
-      const credits = inTier * rate;
-      perUnitTotal += credits;
+      const amount = inTier * rate;
+      perUnitTotal += amount;
       remaining = Math.max(0, remaining - avail);
       const tr = document.createElement('tr');
       tr.className = inTier > 0 ? 'tier-active' : 'tier-zero';
@@ -517,7 +524,7 @@
         <td>${labels[i]}</td>
         <td>${rate === 0 ? 'Included' : `$${rate}/${unit}`}</td>
         <td>${inTier > 0 ? inTier.toLocaleString() : '—'}</td>
-        <td>${credits > 0 ? (credits < 1 ? credits.toFixed(2) : Math.round(credits).toLocaleString()) : '—'}</td>`;
+        <td>${fmtAmt(amount)}</td>`;
       tbody.appendChild(tr);
     });
     if (multiplier != null && multiplier > 1) {
@@ -526,7 +533,7 @@
       tr.style.fontWeight = 'bold';
       tr.innerHTML = `
         <td colspan="3">× ${multiplier} devices</td>
-        <td>${Math.round(perUnitTotal * multiplier).toLocaleString()}</td>`;
+        <td>${fmtAmt(perUnitTotal * multiplier)}</td>`;
       tbody.appendChild(tr);
     }
   }
@@ -615,7 +622,7 @@
     const bwCredits       = calcTiered(bwTB,       TIERS.bandwidth);
     const storageCredits  = calcTiered(storageTB,  TIERS.storage);
 
-    const deviceCredits      = Math.max(0, devices - FLEET.devicesIncluded) * FLEET.deviceRate;
+    const deviceDollars      = Math.max(0, devices - FLEET.devicesIncluded) * FLEET.deviceRate;
     const perDeviceRemote    = Math.max(0, remoteMinPerDevice - FLEET.remoteIncludedPerDevice) * FLEET.remoteRate;
     const remoteCredits      = perDeviceRemote * devices;
 
@@ -623,20 +630,21 @@
       { size: FLEET.devicesIncluded, rate: 0 },
       { size: Infinity,              rate: FLEET.deviceRate },
     ], [`1–${FLEET.devicesIncluded} devices`, `${FLEET.devicesIncluded}+ devices`],
-    'device', 'tier-devices-body');
+    'device', 'tier-devices-body', null, true);
 
     renderFleetBreakdown(remoteMinPerDevice, [
       { size: FLEET.remoteIncludedPerDevice, rate: 0 },
       { size: Infinity,                      rate: FLEET.remoteRate },
     ], [`First ${FLEET.remoteIncludedPerDevice.toLocaleString()} min (included)`, 'Additional'],
-    'min', 'tier-remote-body', devices);
+    'min', 'tier-remote-body', devices, false);
 
-    const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits + deviceCredits + remoteCredits;
+    const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits + remoteCredits;
     const annualCredits   = monthlyCredits * 12;
     const year1Credits    = initCredits + annualCredits;
-    // Credits are the end output — discount only affects the dollar price per credit
     const netCredits      = Math.max(0, year1Credits - allotment);
-    const dollarCost      = netCredits * (1 - discountPct);   // 1 credit = $1 at full price
+    const deviceAnnualDollars = deviceDollars * 12;
+    const creditsCost     = netCredits * (1 - discountPct);
+    const dollarCost      = creditsCost + deviceAnnualDollars;
     const dollarSavings   = netCredits * discountPct;
 
     document.getElementById('out-init-credits').textContent = fmtCredits(initCredits);
@@ -645,13 +653,14 @@
     document.getElementById('out-query').textContent        = fmtCredits(queryCredits);
     document.getElementById('out-bandwidth').textContent    = fmtCredits(bwCredits);
     document.getElementById('out-storage').textContent      = fmtCredits(storageCredits);
-    document.getElementById('out-devices').textContent      = fmtCredits(deviceCredits);
+    document.getElementById('out-devices').textContent      = fmtDollars(deviceDollars) + '/mo';
     document.getElementById('out-remote').textContent       = fmtCredits(remoteCredits);
     document.getElementById('out-monthly').textContent      = fmtCredits(monthlyCredits);
     document.getElementById('out-annual').textContent       = fmtCredits(annualCredits);
     document.getElementById('out-year1').textContent        = fmtCredits(year1Credits);
     document.getElementById('out-credits-needed').textContent   = fmtCredits(netCredits);
     document.getElementById('out-price-per-credit').textContent = '$' + (1 - discountPct).toFixed(2);
+    document.getElementById('out-device-fees').textContent      = fmtDollars(deviceAnnualDollars);
     document.getElementById('out-total').textContent             = fmtDollars(dollarCost);
 
     const pct = Math.round(discountPct * 100);
