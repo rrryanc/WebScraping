@@ -517,7 +517,7 @@
         <td>${labels[i]}</td>
         <td>${rate === 0 ? 'Included' : `$${rate}/${unit}`}</td>
         <td>${inTier > 0 ? inTier.toLocaleString() : '—'}</td>
-        <td>${credits > 0 ? Math.round(credits).toLocaleString() : '—'}</td>`;
+        <td>${credits > 0 ? (credits < 1 ? credits.toFixed(2) : Math.round(credits).toLocaleString()) : '—'}</td>`;
       tbody.appendChild(tr);
     });
     if (multiplier != null && multiplier > 1) {
