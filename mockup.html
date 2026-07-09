@@ -459,43 +459,43 @@
 <script>
   // ── Tiered credit calculation ──
   // Each tier: { size: units in this tier (Infinity for last), rate: credits per unit }
-  /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: 2026-05-12 */
-  const PRICING_LAST_UPDATED = '2026-05-12';
+    /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: 2026-07-09 */
+  const PRICING_LAST_UPDATED = '2026-07-09';
   const FLEET = {
-    devicesIncluded:         5,      // devices included per plan
-    deviceRate:              45,     // $/device/mo for additional devices
-    remoteIncludedPerDevice: 300,    // min/device/mo included on Pro/Enterprise
-    remoteRate:              0.05,   // $/min for additional remote access
+    devicesIncluded:         5,
+    deviceRate:              20.0,
+    remoteIncludedPerDevice: 300,
+    remoteRate:              0.05,
   };
   let TIERS = {
     indexing: [
-      { size: 1,        rate: 0  },
-      { size: 9,        rate: 35 },
-      { size: 90,       rate: 28 },
-      { size: 900,      rate: 24 },
-      { size: Infinity, rate: 22 },
+      { size: 1.0, rate: 0.0 },
+      { size: 9.0, rate: 35.0 },
+      { size: 99.0, rate: 28.0 },
+      { size: 900.0, rate: 24.0 },
+      { size: Infinity, rate: 22.0 },
     ],
     query: [
-      { size: 1,        rate: 0    },
-      { size: 9,        rate: 3.65 },
-      { size: 90,       rate: 2.75 },
-      { size: 400,      rate: 2.35 },
-      { size: 500,      rate: 2.15 },
+      { size: 1.0, rate: 0.0 },
+      { size: 9.0, rate: 3.65 },
+      { size: 99.0, rate: 2.75 },
+      { size: 490.0, rate: 2.35 },
+      { size: 950.0, rate: 2.15 },
       { size: Infinity, rate: 2.05 },
     ],
     bandwidth: [
-      { size: 0.1,      rate: 0   },
-      { size: 9.9,      rate: 150 },
-      { size: 90,       rate: 135 },
-      { size: 900,      rate: 125 },
-      { size: Infinity, rate: 115 },
+      { size: 0.1, rate: 0.0 },
+      { size: 9.9, rate: 150.0 },
+      { size: 99.0, rate: 135.0 },
+      { size: 900.0, rate: 125.0 },
+      { size: Infinity, rate: 115.0 },
     ],
     storage: [
-      { size: 1,        rate: 0  },
-      { size: 9,        rate: 50 },
-      { size: 90,       rate: 40 },
-      { size: 900,      rate: 30 },
-      { size: Infinity, rate: 26 },
+      { size: 1.0, rate: 0.0 },
+      { size: 9.0, rate: 50.0 },
+      { size: 99.0, rate: 40.0 },
+      { size: 900.0, rate: 30.0 },
+      { size: Infinity, rate: 26.0 },
     ],
   };
   /* PRICING:END */
