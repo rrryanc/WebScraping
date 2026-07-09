@@ -373,9 +373,8 @@
     <div class="summary-card">
       <h2>Estimated Costs</h2>
 
-      <!-- ── Credits section ── -->
-      <div class="section-sublabel">Credits</div>
-
+      <!-- One-time -->
+      <div class="section-sublabel">One-time</div>
       <div class="cost-line">
         <span class="cost-name">Initial indexing</span>
         <span class="cost-value" id="out-init-credits">–</span>
@@ -384,66 +383,77 @@
         <span class="cost-name">Credit allotment</span>
         <span class="cost-value green" id="out-allotment">–</span>
       </div>
+
+      <div class="summary-divider"></div>
+
+      <!-- Monthly usage -->
+      <div class="section-sublabel">Monthly usage</div>
       <div class="cost-line">
-        <span class="cost-name">Indexing (mo)</span>
+        <span class="cost-name">Indexing</span>
         <span class="cost-value" id="out-indexing">–</span>
       </div>
       <div class="cost-line">
-        <span class="cost-name">Query (mo)</span>
+        <span class="cost-name">Query</span>
         <span class="cost-value" id="out-query">–</span>
       </div>
       <div class="cost-line">
-        <span class="cost-name">Bandwidth (mo)</span>
+        <span class="cost-name">Bandwidth</span>
         <span class="cost-value" id="out-bandwidth">–</span>
       </div>
       <div class="cost-line">
-        <span class="cost-name">Storage (mo)</span>
+        <span class="cost-name">Storage</span>
         <span class="cost-value" id="out-storage">–</span>
       </div>
+
+      <div class="summary-divider"></div>
+
+      <!-- Fleet: Devices -->
+      <div class="section-sublabel">Devices</div>
       <div class="cost-line">
-        <span class="cost-name">Remote access (mo)</span>
+        <span class="cost-name">Monthly fee</span>
+        <span class="cost-value" id="out-devices">–</span>
+      </div>
+
+      <div class="summary-divider"></div>
+
+      <!-- Fleet: Remote access -->
+      <div class="section-sublabel">Remote access</div>
+      <div class="cost-line">
+        <span class="cost-name">Overage (mo)</span>
         <span class="cost-value" id="out-remote">–</span>
       </div>
 
       <div class="summary-divider"></div>
 
-      <div class="cost-line bold">
+      <!-- Summary -->
+      <div class="section-sublabel">Summary</div>
+      <div class="cost-line">
         <span class="cost-name">Monthly credits</span>
         <span class="cost-value" id="out-monthly">–</span>
       </div>
-      <div class="cost-line bold">
+      <div class="cost-line">
         <span class="cost-name">Annual credits</span>
         <span class="cost-value" id="out-annual">–</span>
       </div>
-      <div class="cost-line bold">
+      <div class="cost-line">
         <span class="cost-name">Year 1 credits</span>
         <span class="cost-value" id="out-year1">–</span>
       </div>
-      <div class="cost-line bold">
+      <div class="cost-line">
         <span class="cost-name">Credits needed</span>
         <span class="cost-value" id="out-credits-needed">–</span>
-      </div>
-
-      <div class="summary-divider"></div>
-
-      <!-- ── Dollars section ── -->
-      <div class="section-sublabel">Dollars</div>
-
-      <div class="cost-line">
-        <span class="cost-name">Devices (mo)</span>
-        <span class="cost-value" id="out-devices">–</span>
-      </div>
-      <div class="cost-line">
-        <span class="cost-name">Device fees (annual)</span>
-        <span class="cost-value" id="out-device-fees">–</span>
       </div>
       <div class="cost-line">
         <span class="cost-name">Price per credit</span>
         <span class="cost-value" id="out-price-per-credit">$1.00</span>
       </div>
-      <div class="cost-line bold">
+      <div class="cost-line">
         <span class="cost-name">Credit cost (Year 1)</span>
         <span class="cost-value" id="out-credit-cost">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Device fees (annual)</span>
+        <span class="cost-value" id="out-device-fees">–</span>
       </div>
 
       <div class="summary-divider"></div>
