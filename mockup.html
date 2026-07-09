@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pricing Calculator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      background: #eeeef3;
+      color: #111;
+      min-height: 100vh;
+      padding: 64px 32px;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #111;
+      margin-bottom: 28px;
+    }
+
+    /* ── Two-column layout ── */
+    .calc-layout {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 32px 36px;
+    }
+
+    /* ── Section labels ── */
+    .section-label {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 20px;
+    }
+    .section-sublabel {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 16px;
+    }
+    .divider {
+      height: 1px;
+      background: #e5e7eb;
+      margin: 8px 0 24px;
+    }
+
+    /* ── Slider rows ── */
+    .slider-group {
+      display: grid;
+      grid-template-columns: 160px 1fr 96px;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .slider-group .slider-label {
+      font-size: 0.875rem;
+      color: #444;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+      background: #d1d5db;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #6b5cf6;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 1.5px #6b5cf6, 0 2px 6px rgba(107,92,246,0.3);
+      cursor: pointer;
+    }
+
+    .slider-number {
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      color: #111;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      outline: none;
+      font-family: inherit;
+      text-align: right;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+    .slider-number:focus { border-color: #6b5cf6; }
+
+    /* ── Text / number inputs ── */
+    .field-group { margin-bottom: 18px; }
+    .field-group label {
+      display: block;
+      font-size: 0.875rem;
+      color: #444;
+      margin-bottom: 8px;
+    }
+    .input-with-suffix {
+      display: flex;
+      align-items: center;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+    .input-with-suffix:focus-within { border-color: #6b5cf6; }
+    .input-with-suffix input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 9px 12px;
+      color: #111;
+    }
+    .input-with-suffix .sfx {
+      padding: 9px 12px;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      background: #f9fafb;
+      border-left: 1px solid #e5e7eb;
+    }
+
+    /* ── Right: summary ── */
+    .summary-card { background: #fff; border-radius: 14px; padding: 28px 32px; }
+    .summary-card h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 20px;
+    }
+
+    .cost-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 11px;
+    }
+    .cost-line .cost-name { font-size: 0.875rem; color: #6b7280; }
+    .cost-line .cost-value { font-size: 0.875rem; color: #111; font-weight: 500; }
+    .cost-line .cost-value.green { color: #16a34a; }
+    .cost-line.bold .cost-name { color: #111; font-weight: 600; font-size: 0.9rem; }
+    .cost-line.bold .cost-value { color: #111; font-weight: 700; font-size: 0.9rem; }
+
+    .summary-divider { height: 1px; background: #e5e7eb; margin: 10px 0 14px; }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .total-row .total-label { font-size: 1rem; font-weight: 700; color: #111; }
+    .total-row .total-amount { font-size: 2rem; font-weight: 800; color: #111; letter-spacing: -0.03em; }
+
+    .total-sub {
+      font-size: 0.78rem;
+      color: #9ca3af;
+      text-align: right;
+      margin-bottom: 24px;
+    }
+
+    .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn {
+      padding: 11px 16px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .btn-outline { background: #fff; border: 1.5px solid #d1d5db; color: #111; }
+    .btn-outline:hover { border-color: #9ca3af; background: #f9fafb; }
+    .btn-primary { background: #6b5cf6; border: 1.5px solid #6b5cf6; color: #fff; }
+    .btn-primary:hover { background: #5b4de0; border-color: #5b4de0; }
+
+    .discount-note {
+      font-size: 0.78rem;
+      color: #16a34a;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .pricing-source {
+      font-size: 0.72rem;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 14px;
+    }
+    .pricing-source a { color: #9ca3af; text-decoration: none; }
+    .pricing-source a:hover { text-decoration: underline; }
+
+    /* ── Tier tooltip table (collapsible) ── */
+    .tier-toggle {
+      font-size: 0.78rem;
+      color: #6b5cf6;
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: inherit;
+      padding: 0;
+      margin-top: -8px;
+      margin-bottom: 20px;
+      display: block;
+    }
+    .tier-table { display: none; margin-bottom: 20px; }
+    .tier-table.open { display: table; width: 100%; border-collapse: collapse; }
+    .tier-table th, .tier-table td {
+      font-size: 0.78rem;
+      padding: 5px 10px;
+      text-align: right;
+      border-bottom: 1px solid #f3f4f6;
+      color: #6b7280;
+    }
+    .tier-table th { color: #9ca3af; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .tier-table td:first-child, .tier-table th:first-child { text-align: left; }
+    .tier-table tr.tier-active td { color: #111; }
+    .tier-table tr.tier-zero td { color: #d1d5db; }
+
+    @media (max-width: 760px) {
+      .calc-layout { grid-template-columns: 1fr; }
+      .slider-group { grid-template-columns: 120px 1fr 80px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Cost calculator</h1>
+
+  <div class="calc-layout">
+
+    <!-- ── LEFT: Inputs ── -->
+    <div class="card">
+
+      <!-- One-time -->
+      <div class="section-label">One-time</div>
+      <div class="slider-group">
+        <span class="slider-label">Initial Indexing (TB)</span>
+        <input type="range" id="s-init" min="0" max="100000" step="1" value="1500" />
+        <input type="number" class="slider-number" id="n-init" value="1500" min="0" max="100000" />
+      </div>
+      <button class="tier-toggle" onclick="toggleTier('tier-init-breakdown')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-init-breakdown">
+        <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-init-body"></tbody>
+      </table>
+
+      <div class="divider"></div>
+
+      <!-- Monthly -->
+      <div class="section-label">Monthly Usage</div>
+
+      <div class="slider-group">
+        <span class="slider-label">Indexing (TB)</span>
+        <input type="range" id="s-indexing" min="0" max="100000" step="1" value="1500" />
+        <input type="number" class="slider-number" id="n-indexing" value="1500" min="0" max="100000" />
+      </div>
+      <button class="tier-toggle" onclick="toggleTier('tier-monthly-breakdown')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-monthly-breakdown">
+        <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-monthly-body"></tbody>
+      </table>
+
+      <div class="slider-group">
+        <span class="slider-label">Query (hours)</span>
+        <input type="range" id="s-query" min="0" max="1000" step="1" value="175" />
+        <input type="number" class="slider-number" id="n-query" value="175" min="0" />
+      </div>
+
+      <button class="tier-toggle" onclick="toggleTier('tier-query')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-query">
+        <thead><tr><th>Tier</th><th>Rate</th><th>Hrs used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-query-body"></tbody>
+      </table>
+
+      <div class="slider-group">
+        <span class="slider-label">Bandwidth (TB)</span>
+        <input type="range" id="s-bandwidth" min="0" max="200" step="0.1" value="8.33" />
+        <input type="number" class="slider-number" id="n-bandwidth" value="8.33" min="0" step="0.1" />
+      </div>
+
+      <button class="tier-toggle" onclick="toggleTier('tier-bw')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-bw">
+        <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-bw-body"></tbody>
+      </table>
+
+      <div class="slider-group">
+        <span class="slider-label">Storage (TB)</span>
+        <input type="range" id="s-storage" min="0" max="2000" step="1" value="0" />
+        <input type="number" class="slider-number" id="n-storage" value="0" min="0" />
+      </div>
+
+      <button class="tier-toggle" onclick="toggleTier('tier-storage')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-storage">
+        <thead><tr><th>Tier</th><th>Rate</th><th>TB used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-storage-body"></tbody>
+      </table>
+
+      <div class="divider"></div>
+
+      <!-- Fleet -->
+      <div class="section-label">Fleet</div>
+
+      <div class="slider-group">
+        <span class="slider-label">Devices</span>
+        <input type="range" id="s-devices" min="0" max="500" step="1" value="10" />
+        <input type="number" class="slider-number" id="n-devices" value="10" min="0" />
+      </div>
+      <button class="tier-toggle" onclick="toggleTier('tier-devices')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-devices">
+        <thead><tr><th>Tier</th><th>Rate</th><th>Devices</th><th>Credits</th></tr></thead>
+        <tbody id="tier-devices-body"></tbody>
+      </table>
+
+      <div class="slider-group">
+        <span class="slider-label">Remote access (min)</span>
+        <input type="range" id="s-remote" min="0" max="50000" step="1" value="0" />
+        <input type="number" class="slider-number" id="n-remote" value="0" min="0" />
+      </div>
+      <button class="tier-toggle" onclick="toggleTier('tier-remote')">▸ Show tier breakdown</button>
+      <table class="tier-table" id="tier-remote">
+        <thead><tr><th>Tier</th><th>Rate</th><th>Min used</th><th>Credits</th></tr></thead>
+        <tbody id="tier-remote-body"></tbody>
+      </table>
+
+      <div class="divider"></div>
+
+      <!-- Discounts -->
+      <div class="section-label">Discounts</div>
+
+      <div class="field-group">
+        <label>1-time Credit Allotment</label>
+        <div class="input-with-suffix">
+          <input type="number" id="creditAllotment" value="23402" min="0" />
+          <span class="sfx">credits</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label>Advance Purchase Discount</label>
+        <div class="input-with-suffix">
+          <input type="number" id="discount" value="10" min="0" max="100" />
+          <span class="sfx">%</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── RIGHT: Summary ── -->
+    <div class="summary-card">
+      <h2>Estimated Credits</h2>
+
+      <div class="section-sublabel">One-time</div>
+      <div class="cost-line">
+        <span class="cost-name">Initial indexing</span>
+        <span class="cost-value" id="out-init-credits">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Credit allotment</span>
+        <span class="cost-value green" id="out-allotment">–</span>
+      </div>
+
+      <div class="summary-divider"></div>
+
+      <div class="section-sublabel">Monthly</div>
+      <div class="cost-line">
+        <span class="cost-name">Indexing</span>
+        <span class="cost-value" id="out-indexing">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Query</span>
+        <span class="cost-value" id="out-query">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Bandwidth</span>
+        <span class="cost-value" id="out-bandwidth">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Storage</span>
+        <span class="cost-value" id="out-storage">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Devices</span>
+        <span class="cost-value" id="out-devices">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Remote access</span>
+        <span class="cost-value" id="out-remote">–</span>
+      </div>
+
+      <div class="summary-divider"></div>
+
+      <div class="cost-line bold">
+        <span class="cost-name">Monthly credits</span>
+        <span class="cost-value" id="out-monthly">–</span>
+      </div>
+      <div class="cost-line bold">
+        <span class="cost-name">Annual credits</span>
+        <span class="cost-value" id="out-annual">–</span>
+      </div>
+      <div class="cost-line bold">
+        <span class="cost-name">Year 1 total</span>
+        <span class="cost-value" id="out-year1">–</span>
+      </div>
+
+      <div class="summary-divider"></div>
+
+      <div class="cost-line bold">
+        <span class="cost-name">Credits needed</span>
+        <span class="cost-value" id="out-credits-needed">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Price per credit</span>
+        <span class="cost-value" id="out-price-per-credit">$1.00</span>
+      </div>
+
+      <div class="summary-divider"></div>
+
+      <div class="total-row">
+        <span class="total-label">Year 1 cost</span>
+        <span class="total-amount" id="out-total">–</span>
+      </div>
+      <div class="total-sub">credits × price per credit</div>
+
+      <div class="btn-group">
+        <button class="btn btn-outline">Contact sales</button>
+        <button class="btn btn-primary">Get started</button>
+      </div>
+      <div class="discount-note" id="discount-note"></div>
+      <div class="pricing-source" id="pricing-source"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Tiered credit calculation ──
+  // Each tier: { size: units in this tier (Infinity for last), rate: credits per unit }
+  /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: 2026-05-12 */
+  const PRICING_LAST_UPDATED = '2026-05-12';
+  const FLEET = {
+    devicesIncluded:         5,      // devices included per plan
+    deviceRate:              45,     // $/device/mo for additional devices
+    remoteIncludedPerDevice: 300,    // min/device/mo included on Pro/Enterprise
+    remoteRate:              0.05,   // $/min for additional remote access
+  };
+  let TIERS = {
+    indexing: [
+      { size: 1,        rate: 0  },
+      { size: 9,        rate: 35 },
+      { size: 90,       rate: 28 },
+      { size: 900,      rate: 24 },
+      { size: Infinity, rate: 22 },
+    ],
+    query: [
+      { size: 1,        rate: 0    },
+      { size: 9,        rate: 3.65 },
+      { size: 90,       rate: 2.75 },
+      { size: 400,      rate: 2.35 },
+      { size: 500,      rate: 2.15 },
+      { size: Infinity, rate: 2.05 },
+    ],
+    bandwidth: [
+      { size: 0.1,      rate: 0   },
+      { size: 9.9,      rate: 150 },
+      { size: 90,       rate: 135 },
+      { size: 900,      rate: 125 },
+      { size: Infinity, rate: 115 },
+    ],
+    storage: [
+      { size: 1,        rate: 0  },
+      { size: 9,        rate: 50 },
+      { size: 90,       rate: 40 },
+      { size: 900,      rate: 30 },
+      { size: Infinity, rate: 26 },
+    ],
+  };
+  /* PRICING:END */
+
+  function renderFleetBreakdown(qty, tiers, labels, unit, tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    tbody.innerHTML = '';
+    let remaining = qty;
+    tiers.forEach(({ size, rate }, i) => {
+      const avail  = size === Infinity ? remaining : size;
+      const inTier = Math.min(remaining, avail);
+      const credits = inTier * rate;
+      remaining = Math.max(0, remaining - avail);
+      const tr = document.createElement('tr');
+      tr.className = inTier > 0 ? 'tier-active' : 'tier-zero';
+      tr.innerHTML = `
+        <td>${labels[i]}</td>
+        <td>${rate === 0 ? 'Included' : `$${rate}/${unit}`}</td>
+        <td>${inTier > 0 ? inTier.toLocaleString() : '—'}</td>
+        <td>${credits > 0 ? Math.round(credits).toLocaleString() : '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function calcTiered(qty, tiers) {
+    let credits = 0, remaining = qty;
+    for (const { size, rate } of tiers) {
+      if (remaining <= 0) break;
+      const inTier = Math.min(remaining, size);
+      credits += inTier * rate;
+      remaining -= inTier;
+    }
+    return credits;
+  }
+
+  function fmtCredits(n) {
+    return Math.round(n).toLocaleString() + ' cr';
+  }
+
+  function fmtDollars(n) {
+    return '$' + Math.round(n).toLocaleString();
+  }
+
+  const TIER_META = {
+    indexing:  { labels: ['0–1 TB','1–10 TB','10–100 TB','100–1,000 TB','1,000–100,000 TB'], unit: 'TB' },
+    query:     { labels: ['0–1 hr','1–10 hr','10–100 hr','100–500 hr','500–1,000 hr','1,000+ hr'], unit: 'hr' },
+    bandwidth: { labels: ['0–0.1 TB','0.1–10 TB','10–100 TB','100–1,000 TB','1,000+ TB'], unit: 'TB' },
+    storage:   { labels: ['0–1 TB','1–10 TB','10–100 TB','100–1,000 TB','1,000+ TB'], unit: 'TB' },
+  };
+
+  function renderBreakdown(qty, tierKey, tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    const { labels, unit } = TIER_META[tierKey];
+    tbody.innerHTML = '';
+    let remaining = qty;
+    TIERS[tierKey].forEach(({ size, rate }, i) => {
+      const avail  = size === Infinity ? remaining : size;
+      const inTier = Math.min(remaining, avail);
+      const credits = inTier * rate;
+      remaining = Math.max(0, remaining - avail);
+      const tr = document.createElement('tr');
+      tr.className = inTier > 0 ? 'tier-active' : 'tier-zero';
+      tr.innerHTML = `
+        <td>${labels[i]}</td>
+        <td>${rate} cr/${unit}</td>
+        <td>${inTier > 0 ? +inTier.toFixed(2).toLocaleString() : '—'}</td>
+        <td>${credits > 0 ? Math.round(credits).toLocaleString() : '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function updateHash() {
+    const params = new URLSearchParams({
+      init:      document.getElementById('n-init').value,
+      indexing:  document.getElementById('n-indexing').value,
+      query:     document.getElementById('n-query').value,
+      bw:        document.getElementById('n-bandwidth').value,
+      storage:   document.getElementById('n-storage').value,
+      devices:   document.getElementById('n-devices').value,
+      remote:    document.getElementById('n-remote').value,
+      allotment: document.getElementById('creditAllotment').value,
+      discount:  document.getElementById('discount').value,
+    });
+    history.replaceState(null, '', '#' + params.toString());
+  }
+
+  function recalc() {
+    const initTB     = +document.getElementById('n-init').value;
+    const indexingTB = +document.getElementById('n-indexing').value;
+    const queryHrs   = +document.getElementById('n-query').value;
+    const bwTB       = +document.getElementById('n-bandwidth').value;
+    const storageTB  = +document.getElementById('n-storage').value;
+    const devices    = +document.getElementById('n-devices').value;
+    const remoteMin  = +document.getElementById('n-remote').value;
+    const allotment  = +document.getElementById('creditAllotment').value;
+    const discountPct = +document.getElementById('discount').value / 100;
+
+    const initCredits     = calcTiered(initTB,     TIERS.indexing);
+    const indexingCredits = calcTiered(indexingTB, TIERS.indexing);
+    renderBreakdown(initTB,     'indexing',  'tier-init-body');
+    renderBreakdown(indexingTB, 'indexing',  'tier-monthly-body');
+    renderBreakdown(queryHrs,   'query',     'tier-query-body');
+    renderBreakdown(bwTB,       'bandwidth', 'tier-bw-body');
+    renderBreakdown(storageTB,  'storage',   'tier-storage-body');
+    const queryCredits    = calcTiered(queryHrs,   TIERS.query);
+    const bwCredits       = calcTiered(bwTB,       TIERS.bandwidth);
+    const storageCredits  = calcTiered(storageTB,  TIERS.storage);
+
+    const deviceCredits  = Math.max(0, devices - FLEET.devicesIncluded) * FLEET.deviceRate;
+    const includedRemote = devices * FLEET.remoteIncludedPerDevice;
+    const remoteCredits  = Math.max(0, remoteMin - includedRemote) * FLEET.remoteRate;
+
+    renderFleetBreakdown(devices, [
+      { size: FLEET.devicesIncluded, rate: 0 },
+      { size: Infinity,              rate: FLEET.deviceRate },
+    ], [`1–${FLEET.devicesIncluded} devices`, `${FLEET.devicesIncluded}+ devices`],
+    'device', 'tier-devices-body');
+
+    renderFleetBreakdown(remoteMin, [
+      { size: includedRemote, rate: 0 },
+      { size: Infinity,       rate: FLEET.remoteRate },
+    ], [`First ${includedRemote.toLocaleString()} min (${devices}×${FLEET.remoteIncludedPerDevice})`, 'Additional'],
+    'min', 'tier-remote-body');
+
+    const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits + deviceCredits + remoteCredits;
+    const annualCredits   = monthlyCredits * 12;
+    const year1Credits    = initCredits + annualCredits;
+    // Credits are the end output — discount only affects the dollar price per credit
+    const netCredits      = Math.max(0, year1Credits - allotment);
+    const dollarCost      = netCredits * (1 - discountPct);   // 1 credit = $1 at full price
+    const dollarSavings   = netCredits * discountPct;
+
+    document.getElementById('out-init-credits').textContent = fmtCredits(initCredits);
+    document.getElementById('out-allotment').textContent    = '−' + fmtCredits(allotment);
+    document.getElementById('out-indexing').textContent     = fmtCredits(indexingCredits);
+    document.getElementById('out-query').textContent        = fmtCredits(queryCredits);
+    document.getElementById('out-bandwidth').textContent    = fmtCredits(bwCredits);
+    document.getElementById('out-storage').textContent      = fmtCredits(storageCredits);
+    document.getElementById('out-devices').textContent      = fmtCredits(deviceCredits);
+    document.getElementById('out-remote').textContent       = fmtCredits(remoteCredits);
+    document.getElementById('out-monthly').textContent      = fmtCredits(monthlyCredits);
+    document.getElementById('out-annual').textContent       = fmtCredits(annualCredits);
+    document.getElementById('out-year1').textContent        = fmtCredits(year1Credits);
+    document.getElementById('out-credits-needed').textContent   = fmtCredits(netCredits);
+    document.getElementById('out-price-per-credit').textContent = '$' + (1 - discountPct).toFixed(2);
+    document.getElementById('out-total').textContent             = fmtDollars(dollarCost);
+
+    const pct = Math.round(discountPct * 100);
+    const note = document.getElementById('discount-note');
+    if (pct > 0) {
+      note.textContent = `Saving ${fmtDollars(dollarSavings)} with ${pct}% advance purchase discount`;
+      note.style.display = 'block';
+    } else {
+      note.style.display = 'none';
+    }
+    updateHash();
+  }
+
+  // ── Slider ↔ number sync + track fill ──
+  function updateTrack(slider) {
+    const pct = (slider.value - slider.min) / (slider.max - slider.min) * 100;
+    slider.style.background =
+      `linear-gradient(to right, #6b5cf6 ${pct}%, #d1d5db ${pct}%)`;
+  }
+
+  [['s-init','n-init'], ['s-indexing','n-indexing'],
+   ['s-query','n-query'], ['s-bandwidth','n-bandwidth'],
+   ['s-storage','n-storage'], ['s-devices','n-devices'],
+   ['s-remote','n-remote']].forEach(([sid, nid]) => {
+    const slider = document.getElementById(sid);
+    const num    = document.getElementById(nid);
+    updateTrack(slider);
+    slider.addEventListener('input', () => { num.value = slider.value; updateTrack(slider); recalc(); });
+    num.addEventListener('input',   () => { slider.value = num.value; updateTrack(slider); recalc(); });
+  });
+
+  ['creditAllotment','discount'].forEach(id =>
+    document.getElementById(id).addEventListener('input', recalc)
+  );
+
+  // ── Tier table toggles ──
+  function toggleTier(id) {
+    const el = document.getElementById(id);
+    const btn = el.previousElementSibling;
+    el.classList.toggle('open');
+    btn.textContent = el.classList.contains('open')
+      ? btn.textContent.replace('▸','▾')
+      : btn.textContent.replace('▾','▸');
+  }
+
+  // ── Pre-fill inputs from URL hash ──
+  // Share a pre-configured link like:
+  // calculator.html#init=1500&indexing=1500&query=175&bw=8.33&storage=0&allotment=23402&discount=10
+  (function () {
+    const p = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const map = {
+      init:      ['n-init',      's-init'],
+      indexing:  ['n-indexing',  's-indexing'],
+      query:     ['n-query',     's-query'],
+      bw:        ['n-bandwidth', 's-bandwidth'],
+      storage:   ['n-storage',   's-storage'],
+      devices:   ['n-devices',   's-devices'],
+      remote:    ['n-remote',    's-remote'],
+      allotment: ['creditAllotment'],
+      discount:  ['discount'],
+    };
+    for (const [key, ids] of Object.entries(map)) {
+      const val = p.get(key);
+      if (val === null) continue;
+      ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = val; });
+    }
+    ['s-init','s-indexing','s-query','s-bandwidth','s-storage','s-devices','s-remote']
+      .forEach(id => updateTrack(document.getElementById(id)));
+  })();
+
+  recalc();
+
+  document.getElementById('pricing-source').innerHTML =
+    `Rates as of ${PRICING_LAST_UPDATED} · <a href="https://foxglove.dev/pricing" target="_blank" rel="noopener">foxglove.dev/pricing</a>`;
+</script>
+</body>
+</html>
