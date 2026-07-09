@@ -11,7 +11,12 @@ import re
 import sys
 from datetime import date
 
-URL      = "https://www.foxglove.dev/pricing"
+# Try the marketing page first; fall back to the docs page which has the
+# tiered Rate/Range tables. Both are publicly accessible in a browser.
+URLS = [
+    "https://www.foxglove.dev/pricing",
+    "https://docs.foxglove.dev/docs/pricing",
+]
 ROOT     = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
 HTML_OUT = os.path.join(ROOT, "mockup.html")
 
@@ -25,22 +30,17 @@ SECTION_MAP = {
 
 # ── Playwright fetch ──────────────────────────────────────────────────────────
 
-def fetch_page_text():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page(
-            user_agent=(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            )
+def scrape_url(browser, url):
+    page = browser.new_page(
+        user_agent=(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
         )
-        print(f"Navigating to {URL}...", file=sys.stderr)
-        page.goto(URL, wait_until="networkidle", timeout=30000)
-
-        # Extract each table with its nearest preceding heading.
-        sections = page.evaluate("""() => {
+    )
+    print(f"Navigating to {url}...", file=sys.stderr)
+    page.goto(url, wait_until="networkidle", timeout=30000)
+    result = page.evaluate("""() => {
             const results = [];
             document.querySelectorAll('table').forEach(table => {
                 // Find nearest preceding heading
@@ -67,9 +67,26 @@ def fetch_page_text():
             // Also grab the full body text for prose rate parsing (fleet etc.)
             return { tables: results, bodyText: document.body.innerText };
         }""")
+    page.close()
+    return result
 
+
+def fetch_page_text():
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        for url in URLS:
+            data = scrape_url(browser, url)
+            tiers = build_tiers(data)
+            if tiers:
+                print(f"  Found tier tables at {url}", file=sys.stderr)
+                browser.close()
+                return data
+            print(f"  No tier tables at {url} — trying next...", file=sys.stderr)
+            print(f"  Tables found: {[(t['heading'], len(t['rows'])) for t in data['tables']]}", file=sys.stderr)
         browser.close()
-        return sections
+        # Return last page's data so main() can report the diagnostic
+        return data
 
 
 # ── Table → tier parsing ──────────────────────────────────────────────────────
@@ -253,10 +270,7 @@ def main():
     print("Parsing tiers...", file=sys.stderr)
     tiers = build_tiers(page_data)
     if not tiers:
-        print("ERROR: No pricing tiers found. Page structure may have changed.", file=sys.stderr)
-        print("Tables found:", file=sys.stderr)
-        for t in page_data["tables"]:
-            print(f"  heading={t['heading']!r}  rows={len(t['rows'])}", file=sys.stderr)
+        print("ERROR: No pricing tiers found on any URL. Page structure may have changed.", file=sys.stderr)
         sys.exit(1)
 
     print("Parsing fleet...", file=sys.stderr)
