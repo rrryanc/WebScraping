@@ -321,6 +321,23 @@
 
       <div class="divider"></div>
 
+      <!-- Fleet -->
+      <div class="section-label">Fleet</div>
+
+      <div class="slider-group">
+        <span class="slider-label">Devices</span>
+        <input type="range" id="s-devices" min="0" max="500" step="1" value="10" />
+        <input type="number" class="slider-number" id="n-devices" value="10" min="0" />
+      </div>
+
+      <div class="slider-group">
+        <span class="slider-label">Remote access (min)</span>
+        <input type="range" id="s-remote" min="0" max="50000" step="100" value="0" />
+        <input type="number" class="slider-number" id="n-remote" value="0" min="0" />
+      </div>
+
+      <div class="divider"></div>
+
       <!-- Discounts -->
       <div class="section-label">Discounts</div>
 
@@ -375,6 +392,14 @@
         <span class="cost-name">Storage</span>
         <span class="cost-value" id="out-storage">–</span>
       </div>
+      <div class="cost-line">
+        <span class="cost-name">Devices</span>
+        <span class="cost-value" id="out-devices">–</span>
+      </div>
+      <div class="cost-line">
+        <span class="cost-name">Remote access</span>
+        <span class="cost-value" id="out-remote">–</span>
+      </div>
 
       <div class="summary-divider"></div>
 
@@ -426,6 +451,12 @@
   // Each tier: { size: units in this tier (Infinity for last), rate: credits per unit }
   /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: 2026-05-12 */
   const PRICING_LAST_UPDATED = '2026-05-12';
+  const FLEET = {
+    devicesIncluded:         5,      // devices included per plan
+    deviceRate:              45,     // $/device/mo for additional devices
+    remoteIncludedPerDevice: 300,    // min/device/mo included on Pro/Enterprise
+    remoteRate:              0.05,   // $/min for additional remote access
+  };
   let TIERS = {
     indexing: [
       { size: 1,        rate: 0  },
@@ -513,6 +544,8 @@
       query:     document.getElementById('n-query').value,
       bw:        document.getElementById('n-bandwidth').value,
       storage:   document.getElementById('n-storage').value,
+      devices:   document.getElementById('n-devices').value,
+      remote:    document.getElementById('n-remote').value,
       allotment: document.getElementById('creditAllotment').value,
       discount:  document.getElementById('discount').value,
     });
@@ -525,6 +558,8 @@
     const queryHrs   = +document.getElementById('n-query').value;
     const bwTB       = +document.getElementById('n-bandwidth').value;
     const storageTB  = +document.getElementById('n-storage').value;
+    const devices    = +document.getElementById('n-devices').value;
+    const remoteMin  = +document.getElementById('n-remote').value;
     const allotment  = +document.getElementById('creditAllotment').value;
     const discountPct = +document.getElementById('discount').value / 100;
 
@@ -539,7 +574,10 @@
     const bwCredits       = calcTiered(bwTB,       TIERS.bandwidth);
     const storageCredits  = calcTiered(storageTB,  TIERS.storage);
 
-    const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits;
+    const deviceCredits  = Math.max(0, devices - FLEET.devicesIncluded) * FLEET.deviceRate;
+    const remoteCredits  = Math.max(0, remoteMin - devices * FLEET.remoteIncludedPerDevice) * FLEET.remoteRate;
+
+    const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits + deviceCredits + remoteCredits;
     const annualCredits   = monthlyCredits * 12;
     const year1Credits    = initCredits + annualCredits;
     // Credits are the end output — discount only affects the dollar price per credit
@@ -553,6 +591,8 @@
     document.getElementById('out-query').textContent        = fmtCredits(queryCredits);
     document.getElementById('out-bandwidth').textContent    = fmtCredits(bwCredits);
     document.getElementById('out-storage').textContent      = fmtCredits(storageCredits);
+    document.getElementById('out-devices').textContent      = fmtCredits(deviceCredits);
+    document.getElementById('out-remote').textContent       = fmtCredits(remoteCredits);
     document.getElementById('out-monthly').textContent      = fmtCredits(monthlyCredits);
     document.getElementById('out-annual').textContent       = fmtCredits(annualCredits);
     document.getElementById('out-year1').textContent        = fmtCredits(year1Credits);
@@ -580,7 +620,8 @@
 
   [['s-init','n-init'], ['s-indexing','n-indexing'],
    ['s-query','n-query'], ['s-bandwidth','n-bandwidth'],
-   ['s-storage','n-storage']].forEach(([sid, nid]) => {
+   ['s-storage','n-storage'], ['s-devices','n-devices'],
+   ['s-remote','n-remote']].forEach(([sid, nid]) => {
     const slider = document.getElementById(sid);
     const num    = document.getElementById(nid);
     updateTrack(slider);
@@ -613,6 +654,8 @@
       query:     ['n-query',     's-query'],
       bw:        ['n-bandwidth', 's-bandwidth'],
       storage:   ['n-storage',   's-storage'],
+      devices:   ['n-devices',   's-devices'],
+      remote:    ['n-remote',    's-remote'],
       allotment: ['creditAllotment'],
       discount:  ['discount'],
     };
@@ -621,7 +664,7 @@
       if (val === null) continue;
       ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = val; });
     }
-    ['s-init','s-indexing','s-query','s-bandwidth','s-storage']
+    ['s-init','s-indexing','s-query','s-bandwidth','s-storage','s-devices','s-remote']
       .forEach(id => updateTrack(document.getElementById(id)));
   })();
 

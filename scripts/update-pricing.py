@@ -97,10 +97,47 @@ def build_tiers(tables):
     return tiers
 
 
-def format_js_block(tiers, last_updated):
+def parse_fleet(mdx):
+    m = re.search(r'^## Fleet\s*$(.*?)(?=^## |\Z)', mdx, re.MULTILINE | re.DOTALL)
+    if not m:
+        print("WARNING: '## Fleet' section not found", file=sys.stderr)
+        return {"devicesIncluded": 5, "deviceRate": 45, "remoteIncludedPerDevice": 300, "remoteRate": 0.05}
+    fleet = m.group(1)
+
+    # Devices included (Pro/Enterprise column of the included-usage table)
+    m2 = re.search(r'\|\s*\*{0,2}Devices\*{0,2}\s*\|\s*\d+\s*\|\s*(\d+)\s*\|', fleet)
+    devices_included = int(m2.group(1)) if m2 else 5
+
+    # Remote access included (Pro/Enterprise column)
+    m2 = re.search(r'\|\s*\*{0,2}Remote access\*{0,2}\s*\|[^|]*\|\s*(\d+)\s*min', fleet)
+    remote_included = int(m2.group(1)) if m2 else 300
+
+    # Flat rates from prose
+    m2 = re.search(r'\$([0-9.]+)/device/mo', fleet)
+    device_rate = float(m2.group(1)) if m2 else 45
+
+    m2 = re.search(r'\$([0-9.]+)/min', fleet)
+    remote_rate = float(m2.group(1)) if m2 else 0.05
+
+    return {
+        "devicesIncluded":         devices_included,
+        "deviceRate":              device_rate,
+        "remoteIncludedPerDevice": remote_included,
+        "remoteRate":              remote_rate,
+    }
+
+
+def format_js_block(tiers, fleet, last_updated):
+    f = fleet
     lines = [
         f"  /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: {last_updated} */",
         f"  const PRICING_LAST_UPDATED = '{last_updated}';",
+        f"  const FLEET = {{",
+        f"    devicesIncluded:         {f['devicesIncluded']},      // devices included per plan",
+        f"    deviceRate:              {f['deviceRate']},     // $/device/mo for additional devices",
+        f"    remoteIncludedPerDevice: {f['remoteIncludedPerDevice']},   // min/device/mo included on Pro/Enterprise",
+        f"    remoteRate:              {f['remoteRate']},   // $/min for additional remote access",
+        f"  }};",
         "  let TIERS = {",
     ]
     for key in KEY_ORDER:
@@ -124,9 +161,11 @@ def main():
     print(f"Reading {mdx_path}...", file=sys.stderr)
     mdx = open(mdx_path).read()
 
-    tiers        = build_tiers(parse_tables(mdx))
+    tables       = parse_tables(mdx)
+    tiers        = build_tiers(tables)
+    fleet        = parse_fleet(mdx)
     last_updated = date.today().isoformat()
-    new_block    = format_js_block(tiers, last_updated)
+    new_block    = format_js_block(tiers, fleet, last_updated)
 
     html = open(html_path).read()
     html_new = re.sub(r'/\* PRICING:START.*?PRICING:END \*/', new_block, html, flags=re.DOTALL)
