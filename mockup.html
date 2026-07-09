@@ -336,7 +336,7 @@
       </table>
 
       <div class="slider-group">
-        <span class="slider-label">Remote access (min)</span>
+        <span class="slider-label">Remote access (min/device)</span>
         <input type="range" id="s-remote" min="0" max="50000" step="1" value="0" />
         <input type="number" class="slider-number" id="n-remote" value="0" min="0" />
       </div>
@@ -589,7 +589,8 @@
     const bwTB       = +document.getElementById('n-bandwidth').value;
     const storageTB  = +document.getElementById('n-storage').value;
     const devices    = +document.getElementById('n-devices').value;
-    const remoteMin  = +document.getElementById('n-remote').value;
+    const remoteMinPerDevice = +document.getElementById('n-remote').value;
+    const remoteMin  = remoteMinPerDevice * devices;
     const allotment  = +document.getElementById('creditAllotment').value;
     const discountPct = +document.getElementById('discount').value / 100;
 
@@ -617,7 +618,7 @@
     renderFleetBreakdown(remoteMin, [
       { size: includedRemote, rate: 0 },
       { size: Infinity,       rate: FLEET.remoteRate },
-    ], [`First ${includedRemote.toLocaleString()} min (${devices}×${FLEET.remoteIncludedPerDevice})`, 'Additional'],
+    ], [`First ${includedRemote.toLocaleString()} min (${devices}×${FLEET.remoteIncludedPerDevice} included)`, 'Additional'],
     'min', 'tier-remote-body');
 
     const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits + deviceCredits + remoteCredits;
