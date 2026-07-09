@@ -342,7 +342,7 @@
       </div>
       <button class="tier-toggle" onclick="toggleTier('tier-remote')">▸ Show tier breakdown</button>
       <table class="tier-table" id="tier-remote">
-        <thead><tr><th>Tier</th><th>Rate</th><th>Min used</th><th>Credits</th></tr></thead>
+        <thead><tr><th>Tier</th><th>Rate</th><th>Min/device</th><th>Credits/device</th></tr></thead>
         <tbody id="tier-remote-body"></tbody>
       </table>
 
@@ -500,14 +500,16 @@
   };
   /* PRICING:END */
 
-  function renderFleetBreakdown(qty, tiers, labels, unit, tbodyId) {
+  function renderFleetBreakdown(qty, tiers, labels, unit, tbodyId, multiplier) {
     const tbody = document.getElementById(tbodyId);
     tbody.innerHTML = '';
     let remaining = qty;
+    let perUnitTotal = 0;
     tiers.forEach(({ size, rate }, i) => {
       const avail  = size === Infinity ? remaining : size;
       const inTier = Math.min(remaining, avail);
       const credits = inTier * rate;
+      perUnitTotal += credits;
       remaining = Math.max(0, remaining - avail);
       const tr = document.createElement('tr');
       tr.className = inTier > 0 ? 'tier-active' : 'tier-zero';
@@ -518,6 +520,15 @@
         <td>${credits > 0 ? Math.round(credits).toLocaleString() : '—'}</td>`;
       tbody.appendChild(tr);
     });
+    if (multiplier != null && multiplier > 1) {
+      const tr = document.createElement('tr');
+      tr.className = 'tier-active';
+      tr.style.fontWeight = 'bold';
+      tr.innerHTML = `
+        <td colspan="3">× ${multiplier} devices</td>
+        <td>${Math.round(perUnitTotal * multiplier).toLocaleString()}</td>`;
+      tbody.appendChild(tr);
+    }
   }
 
   function calcTiered(qty, tiers) {
@@ -590,7 +601,6 @@
     const storageTB  = +document.getElementById('n-storage').value;
     const devices    = +document.getElementById('n-devices').value;
     const remoteMinPerDevice = +document.getElementById('n-remote').value;
-    const remoteMin  = remoteMinPerDevice * devices;
     const allotment  = +document.getElementById('creditAllotment').value;
     const discountPct = +document.getElementById('discount').value / 100;
 
@@ -605,9 +615,9 @@
     const bwCredits       = calcTiered(bwTB,       TIERS.bandwidth);
     const storageCredits  = calcTiered(storageTB,  TIERS.storage);
 
-    const deviceCredits  = Math.max(0, devices - FLEET.devicesIncluded) * FLEET.deviceRate;
-    const includedRemote = devices * FLEET.remoteIncludedPerDevice;
-    const remoteCredits  = Math.max(0, remoteMin - includedRemote) * FLEET.remoteRate;
+    const deviceCredits      = Math.max(0, devices - FLEET.devicesIncluded) * FLEET.deviceRate;
+    const perDeviceRemote    = Math.max(0, remoteMinPerDevice - FLEET.remoteIncludedPerDevice) * FLEET.remoteRate;
+    const remoteCredits      = perDeviceRemote * devices;
 
     renderFleetBreakdown(devices, [
       { size: FLEET.devicesIncluded, rate: 0 },
@@ -615,11 +625,11 @@
     ], [`1–${FLEET.devicesIncluded} devices`, `${FLEET.devicesIncluded}+ devices`],
     'device', 'tier-devices-body');
 
-    renderFleetBreakdown(remoteMin, [
-      { size: includedRemote, rate: 0 },
-      { size: Infinity,       rate: FLEET.remoteRate },
-    ], [`First ${includedRemote.toLocaleString()} min (${devices}×${FLEET.remoteIncludedPerDevice} included)`, 'Additional'],
-    'min', 'tier-remote-body');
+    renderFleetBreakdown(remoteMinPerDevice, [
+      { size: FLEET.remoteIncludedPerDevice, rate: 0 },
+      { size: Infinity,                      rate: FLEET.remoteRate },
+    ], [`First ${FLEET.remoteIncludedPerDevice.toLocaleString()} min (included)`, 'Additional'],
+    'min', 'tier-remote-body', devices);
 
     const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits + deviceCredits + remoteCredits;
     const annualCredits   = monthlyCredits * 12;
