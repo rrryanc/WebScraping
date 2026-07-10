@@ -524,7 +524,7 @@
       tr.className = inTier > 0 ? 'tier-active' : 'tier-zero';
       tr.innerHTML = `
         <td>${labels[i]}</td>
-        <td>${rate === 0 ? 'Included' : `$${rate}/${unit}`}</td>
+        <td>${rate === 0 ? 'Included' : `${rate} cr/${unit}`}</td>
         <td>${inTier > 0 ? inTier.toLocaleString() : '—'}</td>
         <td>${fmtAmt(amount)}</td>`;
       tbody.appendChild(tr);
