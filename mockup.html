@@ -331,7 +331,7 @@
       </div>
       <button class="tier-toggle" onclick="toggleTier('tier-devices')">▸ Show tier breakdown</button>
       <table class="tier-table" id="tier-devices">
-        <thead><tr><th>Tier</th><th>Rate</th><th>Devices</th><th>$</th></tr></thead>
+        <thead><tr><th>Tier</th><th>Rate</th><th>Devices</th><th>Credits</th></tr></thead>
         <tbody id="tier-devices-body"></tbody>
       </table>
 
@@ -447,14 +447,6 @@
         <span class="cost-name">Price per credit</span>
         <span class="cost-value" id="out-price-per-credit">$1.00</span>
       </div>
-      <div class="cost-line">
-        <span class="cost-name">Credit cost (Year 1)</span>
-        <span class="cost-value" id="out-credit-cost">–</span>
-      </div>
-      <div class="cost-line">
-        <span class="cost-name">Device fees (annual)</span>
-        <span class="cost-value" id="out-device-fees">–</span>
-      </div>
 
       <div class="summary-divider"></div>
 
@@ -462,7 +454,7 @@
         <span class="total-label">Year 1 cost</span>
         <span class="total-amount" id="out-total">–</span>
       </div>
-      <div class="total-sub">credit cost + device fees</div>
+      <div class="total-sub">credits × price per credit</div>
 
       <div class="btn-group">
         <button class="btn btn-outline">Contact sales</button>
@@ -478,8 +470,8 @@
 <script>
   // ── Tiered credit calculation ──
   // Each tier: { size: units in this tier (Infinity for last), rate: credits per unit }
-      /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: 2026-07-10 */
-  const PRICING_LAST_UPDATED = '2026-07-10';
+    /* PRICING:START -- auto-updated by scripts/update-pricing.py -- lastUpdated: 2026-07-09 */
+  const PRICING_LAST_UPDATED = '2026-07-09';
   const FLEET = {
     devicesIncluded:         5,
     deviceRate:              20.0,
@@ -637,7 +629,7 @@
     const bwCredits       = calcTiered(bwTB,       TIERS.bandwidth);
     const storageCredits  = calcTiered(storageTB,  TIERS.storage);
 
-    const deviceDollars      = Math.max(0, devices - FLEET.devicesIncluded) * FLEET.deviceRate;
+    const deviceCredits      = Math.max(0, devices - FLEET.devicesIncluded) * FLEET.deviceRate;
     const perDeviceRemote    = Math.max(0, remoteMinPerDevice - FLEET.remoteIncludedPerDevice) * FLEET.remoteRate;
     const remoteCredits      = perDeviceRemote * devices;
 
@@ -645,7 +637,7 @@
       { size: FLEET.devicesIncluded, rate: 0 },
       { size: Infinity,              rate: FLEET.deviceRate },
     ], [`1–${FLEET.devicesIncluded} devices`, `${FLEET.devicesIncluded}+ devices`],
-    'device', 'tier-devices-body', null, true);
+    'device', 'tier-devices-body', null, false);
 
     renderFleetBreakdown(remoteMinPerDevice, [
       { size: FLEET.remoteIncludedPerDevice, rate: 0 },
@@ -653,13 +645,11 @@
     ], [`First ${FLEET.remoteIncludedPerDevice.toLocaleString()} min (included)`, 'Additional'],
     'min', 'tier-remote-body', devices, false);
 
-    const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits + remoteCredits;
+    const monthlyCredits  = indexingCredits + queryCredits + bwCredits + storageCredits + deviceCredits + remoteCredits;
     const annualCredits   = monthlyCredits * 12;
     const year1Credits    = initCredits + annualCredits;
     const netCredits      = Math.max(0, year1Credits - allotment);
-    const deviceAnnualDollars = deviceDollars * 12;
-    const creditsCost     = netCredits * (1 - discountPct);
-    const dollarCost      = creditsCost + deviceAnnualDollars;
+    const dollarCost      = netCredits * (1 - discountPct);
     const dollarSavings   = netCredits * discountPct;
 
     document.getElementById('out-init-credits').textContent = fmtCredits(initCredits);
@@ -668,15 +658,13 @@
     document.getElementById('out-query').textContent        = fmtCredits(queryCredits);
     document.getElementById('out-bandwidth').textContent    = fmtCredits(bwCredits);
     document.getElementById('out-storage').textContent      = fmtCredits(storageCredits);
-    document.getElementById('out-devices').textContent      = fmtDollars(deviceDollars) + '/mo';
+    document.getElementById('out-devices').textContent      = fmtCredits(deviceCredits);
     document.getElementById('out-remote').textContent       = fmtCredits(remoteCredits);
     document.getElementById('out-monthly').textContent      = fmtCredits(monthlyCredits);
     document.getElementById('out-annual').textContent       = fmtCredits(annualCredits);
     document.getElementById('out-year1').textContent        = fmtCredits(year1Credits);
     document.getElementById('out-credits-needed').textContent   = fmtCredits(netCredits);
     document.getElementById('out-price-per-credit').textContent = '$' + (1 - discountPct).toFixed(2);
-    document.getElementById('out-device-fees').textContent      = fmtDollars(deviceAnnualDollars);
-    document.getElementById('out-credit-cost').textContent      = fmtDollars(creditsCost);
     document.getElementById('out-total').textContent             = fmtDollars(dollarCost);
 
     const pct = Math.round(discountPct * 100);
@@ -723,8 +711,6 @@
   }
 
   // ── Pre-fill inputs from URL hash ──
-  // Share a pre-configured link like:
-  // calculator.html#init=1500&indexing=1500&query=175&bw=8.33&storage=0&allotment=23402&discount=10
   (function () {
     const p = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const map = {
