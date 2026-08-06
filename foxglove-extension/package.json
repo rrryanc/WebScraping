@@ -1,0 +1,33 @@
+{
+  "name": "cylindrical-camera-view",
+  "displayName": "Cylindrical Camera View",
+  "description": "Renders foxglove_extension.CylindricalCameraInfo cameras (fx/fy/cx/cy cylindrical projection, not pinhole) as a dewarped perspective view.",
+  "publisher": "foxglove-extension",
+  "homepage": "https://github.com/rrryanc/webscraping",
+  "keywords": [
+    "foxglove",
+    "extension",
+    "camera",
+    "cylindrical",
+    "mcap"
+  ],
+  "version": "0.1.0",
+  "license": "MIT",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "foxglove-extension build",
+    "local-install": "foxglove-extension install",
+    "package": "foxglove-extension package"
+  },
+  "devDependencies": {
+    "@foxglove/extension": "^2.59.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "create-foxglove-extension": "^1.0.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}

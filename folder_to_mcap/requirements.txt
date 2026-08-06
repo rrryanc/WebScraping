@@ -1,0 +1,6 @@
+mcap>=1.1.0
+pandas>=2.0
+pyarrow>=14.0
+numpy>=1.24
+Pillow>=10.0
+pypcd4>=1.0
