@@ -140,9 +140,41 @@ def _time_obj(timestamp_ns: int) -> dict:
     return {"sec": timestamp_ns // 1_000_000_000, "nsec": timestamp_ns % 1_000_000_000}
 
 
-def write_static_transforms(builder: McapBuilder, extrinsics: pd.DataFrame, base_frame: str, t0: int):
+def _quat_mul(q1: tuple[float, float, float, float], q2: tuple[float, float, float, float]):
+    """Hamilton product of two (x, y, z, w) quaternions: q1 applied first, q2
+    applied in the frame that results from q1 (i.e. R = R1 @ R2)."""
+    x1, y1, z1, w1 = q1
+    x2, y2, z2, w2 = q2
+    return (
+        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+    )
+
+
+# Extrinsics for this vehicle are given in a body-mount convention (child
+# frame axes: X-forward, Y-left, Z-up). Image/CameraCalibration consumers
+# (Foxglove's 3D panel included) instead expect the camera's frame to be in
+# "optical" convention (X-right, Y-down, Z-forward -- i.e. images project
+# along +Z). Composing this fixed rotation into a camera's static transform
+# converts from the former to the latter; without it, every camera's image
+# plane renders facing straight up (body Z) instead of out from the vehicle.
+_OPTICAL_FRAME_ROTATION = (-0.5, 0.5, -0.5, 0.5)  # (x, y, z, w)
+
+
+def write_static_transforms(
+    builder: McapBuilder,
+    extrinsics: pd.DataFrame,
+    base_frame: str,
+    t0: int,
+    camera_names: set[str] = frozenset(),
+):
     for sensor_name, row in extrinsics.iterrows():
         parent = str(row.get("reference_point") or base_frame)
+        qx, qy, qz, qw = float(row["qx"]), float(row["qy"]), float(row["qz"]), float(row["qw"])
+        if sensor_name in camera_names:
+            qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), _OPTICAL_FRAME_ROTATION)
         builder.write_json(
             "/tf_static",
             "foxglove.FrameTransform",
@@ -153,12 +185,7 @@ def write_static_transforms(builder: McapBuilder, extrinsics: pd.DataFrame, base
                 "parent_frame_id": base_frame,
                 "child_frame_id": sensor_name,
                 "translation": {"x": float(row["tx"]), "y": float(row["ty"]), "z": float(row["tz"])},
-                "rotation": {
-                    "x": float(row["qx"]),
-                    "y": float(row["qy"]),
-                    "z": float(row["qz"]),
-                    "w": float(row["qw"]),
-                },
+                "rotation": {"x": qx, "y": qy, "z": qz, "w": qw},
             },
         )
         log.info("wrote static transform %s -> %s (parent recorded as %r)", base_frame, sensor_name, parent)
@@ -362,6 +389,33 @@ def write_trajectory(builder: McapBuilder, trajectory_parquet: Path, map_frame: 
     log.info("wrote %d trajectory poses", len(df))
 
 
+def write_trajectory_path(builder: McapBuilder, trajectory_parquet: Path, map_frame: str, t0: int):
+    """Write the whole trajectory as a single foxglove.PosesInFrame message so
+    Foxglove's 3D panel can render it as a static path/trail, independent of
+    playback position (unlike /tf, which only carries the current pose)."""
+    df = pd.read_parquet(trajectory_parquet).sort_index()
+    poses = [
+        {
+            "position": {"x": float(row["tx"]), "y": float(row["ty"]), "z": float(row["tz"])},
+            "orientation": {
+                "x": float(row["qx"]),
+                "y": float(row["qy"]),
+                "z": float(row["qz"]),
+                "w": float(row["qw"]),
+            },
+        }
+        for _, row in df.iterrows()
+    ]
+    builder.write_json(
+        "/trajectory/path",
+        "foxglove.PosesInFrame",
+        schemas.FOXGLOVE_POSES_IN_FRAME,
+        t0,
+        {"timestamp": _time_obj(t0), "frame_id": map_frame, "poses": poses},
+    )
+    log.info("wrote trajectory path with %d poses", len(poses))
+
+
 def convert(
     input_dir: Path,
     output_path: Path,
@@ -387,6 +441,11 @@ def convert(
     traj_df = pd.read_parquet(trajectory_parquet)
     t0 = int(traj_df.index.min())
 
+    camera_root = input_dir / "camera"
+    camera_names = (
+        {p.name for p in camera_root.iterdir() if p.is_dir()} if camera_root.exists() else set()
+    )
+
     builder = McapBuilder(output_path)
     try:
         # --- calibration -----------------------------------------------
@@ -396,7 +455,7 @@ def convert(
             extrinsics_df = pd.read_parquet(extrinsics_path)
             per_sensor = find_calibration_row(extrinsics_df, sequence_id)
             if per_sensor is not None:
-                write_static_transforms(builder, per_sensor, base_frame, t0)
+                write_static_transforms(builder, per_sensor, base_frame, t0, camera_names)
 
         intrinsics_dir = input_dir / "calibration" / "camera_intrinsic"
         intrinsics_rows: dict[str, pd.Series] = {}
@@ -410,7 +469,6 @@ def convert(
                     write_camera_intrinsics(builder, camera, row, t0)
 
         # --- cameras -----------------------------------------------------
-        camera_root = input_dir / "camera"
         if camera_root.exists():
             for camera_dir in sorted(camera_root.iterdir()):
                 if not camera_dir.is_dir():
@@ -444,6 +502,7 @@ def convert(
 
         # --- trajectory ------------------------------------------------
         write_trajectory(builder, trajectory_parquet, map_frame, base_frame)
+        write_trajectory_path(builder, trajectory_parquet, map_frame, t0)
 
         # --- recording metadata -----------------------------------------
         metadata_path = input_dir / "metadata.parquet"

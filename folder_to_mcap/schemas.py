@@ -86,6 +86,25 @@ FOXGLOVE_FRAME_TRANSFORM = {
     },
 }
 
+FOXGLOVE_POSES_IN_FRAME = {
+    "title": "foxglove.PosesInFrame",
+    "type": "object",
+    "properties": {
+        "timestamp": _TIME,
+        "frame_id": {"type": "string"},
+        "poses": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "position": _VECTOR3,
+                    "orientation": _QUATERNION,
+                },
+            },
+        },
+    },
+}
+
 # PackedElementField.NumericType values used by foxglove.PointCloud.
 POINT_FIELD_FLOAT32 = 7
 

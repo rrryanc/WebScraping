@@ -138,6 +138,7 @@ class TestFolderToMcap(unittest.TestCase):
                     "/camera/TVfront/calibration",
                     "/lidar/RefLidar/points",
                     "/metadata",
+                    "/trajectory/path",
                 },
             )
             counts = {
@@ -217,6 +218,44 @@ class TestFolderToMcap(unittest.TestCase):
             self.assertAlmostEqual(obj["K"][2], 1000.0)  # cx
             self.assertAlmostEqual(obj["K"][5], 600.0)  # cy
             self.assertAlmostEqual(obj["K"][0], obj["K"][4])  # fx == fy
+
+    def test_camera_static_transform_is_rotated_into_optical_frame(self):
+        # The fixture gives every sensor an identity extrinsics rotation
+        # (body-mount convention). Cameras should come out rotated into the
+        # fixed optical convention (X-right, Y-down, Z-forward); RefLidar
+        # (not a camera) should be left as the untouched identity rotation.
+        convert(self.input_dir, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            rotations = {}
+            for _schema, _channel, message in reader.iter_messages(topics=["/tf_static"]):
+                obj = json.loads(message.data)
+                rotations[obj["child_frame_id"]] = obj["rotation"]
+
+            fc1 = rotations["FC1"]
+            self.assertAlmostEqual(fc1["x"], -0.5)
+            self.assertAlmostEqual(fc1["y"], 0.5)
+            self.assertAlmostEqual(fc1["z"], -0.5)
+            self.assertAlmostEqual(fc1["w"], 0.5)
+
+            lidar = rotations["RefLidar"]
+            self.assertAlmostEqual(lidar["x"], 0.0)
+            self.assertAlmostEqual(lidar["y"], 0.0)
+            self.assertAlmostEqual(lidar["z"], 0.0)
+            self.assertAlmostEqual(lidar["w"], 1.0)
+
+    def test_trajectory_path_contains_all_poses(self):
+        convert(self.input_dir, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            _schema, _channel, message = next(
+                reader.iter_messages(topics=["/trajectory/path"])
+            )
+            obj = json.loads(message.data)
+            self.assertEqual(obj["frame_id"], "map")
+            self.assertEqual(len(obj["poses"]), 3)
+            self.assertAlmostEqual(obj["poses"][0]["position"]["x"], 33.4)
+            self.assertAlmostEqual(obj["poses"][-1]["position"]["x"], 33.0)
 
 
 if __name__ == "__main__":
