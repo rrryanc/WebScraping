@@ -111,6 +111,22 @@ CYLINDRICAL_CAMERA_INFO = {
     },
 }
 
+FOXGLOVE_CAMERA_CALIBRATION = {
+    "title": "foxglove.CameraCalibration",
+    "type": "object",
+    "properties": {
+        "timestamp": _TIME,
+        "frame_id": {"type": "string"},
+        "width": {"type": "integer"},
+        "height": {"type": "integer"},
+        "distortion_model": {"type": "string"},
+        "D": {"type": "array", "items": {"type": "number"}},
+        "K": {"type": "array", "items": {"type": "number"}},
+        "R": {"type": "array", "items": {"type": "number"}},
+        "P": {"type": "array", "items": {"type": "number"}},
+    },
+}
+
 RECORDING_METADATA = {
     "title": "folder_to_mcap.RecordingMetadata",
     "type": "object",

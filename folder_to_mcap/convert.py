@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import io
 import json
 import logging
 import re
@@ -32,9 +33,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from mcap.writer import CompressionType, Writer
+from PIL import Image
 from pypcd4 import PointCloud
 
-from . import schemas
+from . import dewarp, schemas
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger("folder_to_mcap")
@@ -183,9 +185,68 @@ def write_camera_intrinsics(builder: McapBuilder, camera: str, row: pd.Series, t
     )
 
 
-def write_camera_frames(builder: McapBuilder, camera: str, camera_dir: Path, index_parquet: Path):
+def write_camera_calibration(
+    builder: McapBuilder, camera: str, width: int, height: int, f_virtual: float, t0: int
+):
+    """Write a foxglove.CameraCalibration message describing the virtual
+    pinhole camera that /camera/{camera}/image_rect was rectified into, so
+    Foxglove's built-in 3D panel can project the rectified image directly."""
+    cx = width / 2
+    cy = height / 2
+    builder.write_json(
+        f"/camera/{camera}/calibration",
+        "foxglove.CameraCalibration",
+        schemas.FOXGLOVE_CAMERA_CALIBRATION,
+        t0,
+        {
+            "timestamp": _time_obj(t0),
+            "frame_id": camera,
+            "width": width,
+            "height": height,
+            "distortion_model": "",
+            "D": [],
+            "K": [f_virtual, 0.0, cx, 0.0, f_virtual, cy, 0.0, 0.0, 1.0],
+            "R": [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            "P": [f_virtual, 0.0, cx, 0.0, 0.0, f_virtual, cy, 0.0, 0.0, 0.0, 1.0, 0.0],
+        },
+    )
+
+
+def write_camera_frames(
+    builder: McapBuilder,
+    camera: str,
+    camera_dir: Path,
+    index_parquet: Path,
+    intrinsics_row: pd.Series | None,
+    horizontal_fov_deg: float,
+) -> tuple[int, int, float] | None:
+    """Write raw /camera/{camera}/image frames, and, if intrinsics_row is
+    given, also write dewarped /camera/{camera}/image_rect frames (built from
+    a single remap LUT reused across all frames). Returns the
+    (dest_width, dest_height, f_virtual) of the rectified view, or None if no
+    rectification was performed."""
     frame_index = read_frame_index(index_parquet)
     topic = f"/camera/{camera}/image"
+    rect_topic = f"/camera/{camera}/image_rect"
+
+    lut = None
+    dest_width = dest_height = None
+    if intrinsics_row is not None:
+        src_width = int(intrinsics_row["width"])
+        src_height = int(intrinsics_row["height"])
+        dest_width, dest_height = src_width, src_height
+        lut = dewarp.build_remap_lut(
+            fx=float(intrinsics_row["fx"]),
+            fy=float(intrinsics_row["fy"]),
+            cx=float(intrinsics_row["cx"]),
+            cy=float(intrinsics_row["cy"]),
+            src_width=src_width,
+            src_height=src_height,
+            dest_width=dest_width,
+            dest_height=dest_height,
+            horizontal_fov_deg=horizontal_fov_deg,
+        )
+
     count = 0
     for timestamp_ns, row in frame_index.iterrows():
         filename = Path(row["filename"]).name
@@ -206,8 +267,29 @@ def write_camera_frames(builder: McapBuilder, camera: str, camera_dir: Path, ind
                 "data": base64.b64encode(data).decode("ascii"),
             },
         )
+        if lut is not None:
+            with Image.open(io.BytesIO(data)) as im:
+                src_rgb = np.array(im.convert("RGB"))
+            rect_rgb = dewarp.apply_remap(lut, src_rgb)
+            buf = io.BytesIO()
+            Image.fromarray(rect_rgb).save(buf, format="JPEG", quality=90)
+            builder.write_json(
+                rect_topic,
+                "foxglove.CompressedImage",
+                schemas.FOXGLOVE_COMPRESSED_IMAGE,
+                int(timestamp_ns),
+                {
+                    "timestamp": _time_obj(int(timestamp_ns)),
+                    "frame_id": camera,
+                    "format": "jpeg",
+                    "data": base64.b64encode(buf.getvalue()).decode("ascii"),
+                },
+            )
         count += 1
-    log.info("wrote %d frames for camera %s", count, camera)
+    log.info(
+        "wrote %d frames for camera %s%s", count, camera, " (+ rectified)" if lut is not None else ""
+    )
+    return (dest_width, dest_height, lut.f_virtual) if lut is not None else None
 
 
 def _pack_point_cloud_xyzi(points_xyzi: np.ndarray) -> bytes:
@@ -280,7 +362,13 @@ def write_trajectory(builder: McapBuilder, trajectory_parquet: Path, map_frame: 
     log.info("wrote %d trajectory poses", len(df))
 
 
-def convert(input_dir: Path, output_path: Path, base_frame: str = "base_link", map_frame: str = "map"):
+def convert(
+    input_dir: Path,
+    output_path: Path,
+    base_frame: str = "base_link",
+    map_frame: str = "map",
+    rectify_fov_deg: float = 90.0,
+):
     trajectory_root = input_dir / "trajectory"
     sequence_dirs = [p for p in trajectory_root.iterdir() if p.is_dir()] if trajectory_root.exists() else []
     if len(sequence_dirs) != 1:
@@ -333,7 +421,12 @@ def convert(input_dir: Path, output_path: Path, base_frame: str = "base_link", m
                 if not seq_dir.exists() or not index_parquet.exists():
                     log.warning("skipping camera %s: missing %s or %s", camera, seq_dir, index_parquet)
                     continue
-                write_camera_frames(builder, camera, seq_dir, index_parquet)
+                rectified = write_camera_frames(
+                    builder, camera, seq_dir, index_parquet, intrinsics_rows.get(camera), rectify_fov_deg
+                )
+                if rectified is not None:
+                    dest_width, dest_height, f_virtual = rectified
+                    write_camera_calibration(builder, camera, dest_width, dest_height, f_virtual, t0)
 
         # --- lidar ---------------------------------------------------------
         lidar_root = input_dir / "lidar"
@@ -375,8 +468,15 @@ def main():
     parser.add_argument("--output", required=True, type=Path, help="Path to write the .mcap file")
     parser.add_argument("--base-frame", default="base_link")
     parser.add_argument("--map-frame", default="map")
+    parser.add_argument(
+        "--rectify-fov",
+        type=float,
+        default=90.0,
+        help="Horizontal FOV (degrees) of the virtual pinhole camera used to dewarp each "
+        "cylindrical camera's images into /camera/{camera}/image_rect (default: 90.0)",
+    )
     args = parser.parse_args()
-    convert(args.input, args.output, args.base_frame, args.map_frame)
+    convert(args.input, args.output, args.base_frame, args.map_frame, args.rectify_fov)
 
 
 if __name__ == "__main__":

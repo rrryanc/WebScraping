@@ -129,9 +129,13 @@ class TestFolderToMcap(unittest.TestCase):
                     "/tf_static",
                     "/tf",
                     "/camera/FC1/image",
+                    "/camera/FC1/image_rect",
                     "/camera/FC1/intrinsics",
+                    "/camera/FC1/calibration",
                     "/camera/TVfront/image",
+                    "/camera/TVfront/image_rect",
                     "/camera/TVfront/intrinsics",
+                    "/camera/TVfront/calibration",
                     "/lidar/RefLidar/points",
                     "/metadata",
                 },
@@ -141,11 +145,14 @@ class TestFolderToMcap(unittest.TestCase):
                 for ch_id, ch in summary.channels.items()
             }
             self.assertEqual(counts["/camera/FC1/image"], 3)
+            self.assertEqual(counts["/camera/FC1/image_rect"], 3)
             self.assertEqual(counts["/camera/TVfront/image"], 3)
+            self.assertEqual(counts["/camera/TVfront/image_rect"], 3)
             self.assertEqual(counts["/lidar/RefLidar/points"], 3)
             self.assertEqual(counts["/tf"], 3)
             self.assertEqual(counts["/tf_static"], 3)  # one per sensor
             self.assertEqual(counts["/camera/FC1/intrinsics"], 1)
+            self.assertEqual(counts["/camera/FC1/calibration"], 1)
             self.assertEqual(counts["/metadata"], 1)
 
     def test_falls_back_to_nearest_same_vin_calibration(self):
@@ -179,6 +186,37 @@ class TestFolderToMcap(unittest.TestCase):
             obj = json.loads(message.data)
             img_bytes = base64.b64decode(obj["data"])
             self.assertEqual(img_bytes[:2], b"\xff\xd8")  # JPEG magic bytes
+
+    def test_rectified_image_is_valid_jpeg(self):
+        convert(self.input_dir, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            _schema, _channel, message = next(
+                reader.iter_messages(topics=["/camera/FC1/image_rect"])
+            )
+            obj = json.loads(message.data)
+            self.assertEqual(obj["frame_id"], "FC1")
+            img_bytes = base64.b64decode(obj["data"])
+            self.assertEqual(img_bytes[:2], b"\xff\xd8")  # JPEG magic bytes
+
+    def test_camera_calibration_describes_virtual_pinhole(self):
+        convert(self.input_dir, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            _schema, _channel, message = next(
+                reader.iter_messages(topics=["/camera/FC1/calibration"])
+            )
+            obj = json.loads(message.data)
+            self.assertEqual(obj["frame_id"], "FC1")
+            self.assertEqual(obj["distortion_model"], "")
+            self.assertEqual(obj["D"], [])
+            self.assertEqual(obj["width"], 2000)
+            self.assertEqual(obj["height"], 1200)
+            # K = [fx, 0, cx, 0, fy, cy, 0, 0, 1] for the virtual pinhole camera;
+            # cx/cy should be the image center, fx==fy (square virtual pixels).
+            self.assertAlmostEqual(obj["K"][2], 1000.0)  # cx
+            self.assertAlmostEqual(obj["K"][5], 600.0)  # cy
+            self.assertAlmostEqual(obj["K"][0], obj["K"][4])  # fx == fy
 
 
 if __name__ == "__main__":
