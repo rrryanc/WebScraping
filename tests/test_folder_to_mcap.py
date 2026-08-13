@@ -244,6 +244,32 @@ class TestFolderToMcap(unittest.TestCase):
             self.assertAlmostEqual(lidar["z"], 0.0)
             self.assertAlmostEqual(lidar["w"], 1.0)
 
+    def test_camera_yaw_offset_rotates_cameras_only(self):
+        # A --camera-yaw-offset of 90 degrees should compose an extra yaw
+        # correction into every camera's rotation (on top of the optical-frame
+        # fix), while leaving non-camera sensors (RefLidar) untouched.
+        convert(self.input_dir, self.output_path, camera_yaw_offset_deg=90.0)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            rotations = {}
+            for _schema, _channel, message in reader.iter_messages(topics=["/tf_static"]):
+                obj = json.loads(message.data)
+                rotations[obj["child_frame_id"]] = obj["rotation"]
+
+            # 90-degree yaw composed onto the (-0.5, 0.5, -0.5, 0.5) optical
+            # rotation works out to (-sqrt(2)/2, 0, 0, sqrt(2)/2).
+            fc1 = rotations["FC1"]
+            self.assertAlmostEqual(fc1["x"], -0.7071067811865476)
+            self.assertAlmostEqual(fc1["y"], 0.0)
+            self.assertAlmostEqual(fc1["z"], 0.0)
+            self.assertAlmostEqual(fc1["w"], 0.7071067811865476)
+
+            lidar = rotations["RefLidar"]
+            self.assertAlmostEqual(lidar["x"], 0.0)
+            self.assertAlmostEqual(lidar["y"], 0.0)
+            self.assertAlmostEqual(lidar["z"], 0.0)
+            self.assertAlmostEqual(lidar["w"], 1.0)
+
     def test_trajectory_path_contains_all_poses(self):
         convert(self.input_dir, self.output_path)
         with open(self.output_path, "rb") as f:

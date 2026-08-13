@@ -27,6 +27,7 @@ import base64
 import io
 import json
 import logging
+import math
 import re
 from pathlib import Path
 
@@ -163,18 +164,35 @@ def _quat_mul(q1: tuple[float, float, float, float], q2: tuple[float, float, flo
 _OPTICAL_FRAME_ROTATION = (-0.5, 0.5, -0.5, 0.5)  # (x, y, z, w)
 
 
+def _yaw_quat(degrees: float) -> tuple[float, float, float, float]:
+    """Quaternion for a rotation of `degrees` about the sensor's own +Z (up)
+    axis, expressed in (x, y, z, w) order."""
+    half = math.radians(degrees) / 2
+    return (0.0, 0.0, math.sin(half), math.cos(half))
+
+
 def write_static_transforms(
     builder: McapBuilder,
     extrinsics: pd.DataFrame,
     base_frame: str,
     t0: int,
     camera_names: set[str] = frozenset(),
+    camera_yaw_offset_deg: float = 0.0,
 ):
+    # Camera-only correction applied on top of _OPTICAL_FRAME_ROTATION, for
+    # empirically converging on the right heading when a recording's
+    # sensor_extrinsics table turns out to use a different "forward" axis
+    # convention than assumed above (visible as every camera facing exactly
+    # 90 degrees off from the vehicle's true forward direction).
+    camera_correction = _OPTICAL_FRAME_ROTATION
+    if camera_yaw_offset_deg:
+        camera_correction = _quat_mul(_yaw_quat(camera_yaw_offset_deg), _OPTICAL_FRAME_ROTATION)
+
     for sensor_name, row in extrinsics.iterrows():
         parent = str(row.get("reference_point") or base_frame)
         qx, qy, qz, qw = float(row["qx"]), float(row["qy"]), float(row["qz"]), float(row["qw"])
         if sensor_name in camera_names:
-            qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), _OPTICAL_FRAME_ROTATION)
+            qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), camera_correction)
         builder.write_json(
             "/tf_static",
             "foxglove.FrameTransform",
@@ -422,6 +440,7 @@ def convert(
     base_frame: str = "base_link",
     map_frame: str = "map",
     rectify_fov_deg: float = 90.0,
+    camera_yaw_offset_deg: float = 0.0,
 ):
     trajectory_root = input_dir / "trajectory"
     sequence_dirs = [p for p in trajectory_root.iterdir() if p.is_dir()] if trajectory_root.exists() else []
@@ -455,7 +474,9 @@ def convert(
             extrinsics_df = pd.read_parquet(extrinsics_path)
             per_sensor = find_calibration_row(extrinsics_df, sequence_id)
             if per_sensor is not None:
-                write_static_transforms(builder, per_sensor, base_frame, t0, camera_names)
+                write_static_transforms(
+                    builder, per_sensor, base_frame, t0, camera_names, camera_yaw_offset_deg
+                )
 
         intrinsics_dir = input_dir / "calibration" / "camera_intrinsic"
         intrinsics_rows: dict[str, pd.Series] = {}
@@ -534,8 +555,26 @@ def main():
         help="Horizontal FOV (degrees) of the virtual pinhole camera used to dewarp each "
         "cylindrical camera's images into /camera/{camera}/image_rect (default: 90.0)",
     )
+    parser.add_argument(
+        "--camera-yaw-offset",
+        type=float,
+        default=0.0,
+        help="Extra rotation (degrees, about the sensor's own up axis) applied to every "
+        "camera's static transform on top of the built-in body-to-optical-frame "
+        "correction. Use this if cameras render facing 90 degrees away from the "
+        "vehicle's true forward direction in Foxglove's 3D panel -- try -90 or 90 "
+        "to converge on the right value for your recording (default: 0.0, no extra "
+        "correction)",
+    )
     args = parser.parse_args()
-    convert(args.input, args.output, args.base_frame, args.map_frame, args.rectify_fov)
+    convert(
+        args.input,
+        args.output,
+        args.base_frame,
+        args.map_frame,
+        args.rectify_fov,
+        args.camera_yaw_offset,
+    )
 
 
 if __name__ == "__main__":
