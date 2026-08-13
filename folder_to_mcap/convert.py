@@ -165,10 +165,27 @@ _OPTICAL_FRAME_ROTATION = (-0.5, 0.5, -0.5, 0.5)  # (x, y, z, w)
 
 
 def _yaw_quat(degrees: float) -> tuple[float, float, float, float]:
-    """Quaternion for a rotation of `degrees` about the sensor's own +Z (up)
-    axis, expressed in (x, y, z, w) order."""
+    """Quaternion for a rotation of `degrees` about the +Z (up) axis,
+    expressed in (x, y, z, w) order."""
     half = math.radians(degrees) / 2
     return (0.0, 0.0, math.sin(half), math.cos(half))
+
+
+def _rotate_vector(q: tuple[float, float, float, float], v: tuple[float, float, float]):
+    """Rotate 3-vector v=(x, y, z) by quaternion q=(x, y, z, w)."""
+    qx, qy, qz, qw = q
+    vx, vy, vz = v
+    uvx = qy * vz - qz * vy
+    uvy = qz * vx - qx * vz
+    uvz = qx * vy - qy * vx
+    uuvx = qy * uvz - qz * uvy
+    uuvy = qz * uvx - qx * uvz
+    uuvz = qx * uvy - qy * uvx
+    return (
+        vx + 2 * (qw * uvx + uuvx),
+        vy + 2 * (qw * uvy + uuvy),
+        vz + 2 * (qw * uvz + uuvz),
+    )
 
 
 def write_static_transforms(
@@ -177,22 +194,25 @@ def write_static_transforms(
     base_frame: str,
     t0: int,
     camera_names: set[str] = frozenset(),
-    camera_yaw_offset_deg: float = 0.0,
+    yaw_offset_deg: float = 0.0,
 ):
-    # Camera-only correction applied on top of _OPTICAL_FRAME_ROTATION, for
-    # empirically converging on the right heading when a recording's
-    # sensor_extrinsics table turns out to use a different "forward" axis
-    # convention than assumed above (visible as every camera facing exactly
-    # 90 degrees off from the vehicle's true forward direction).
-    camera_correction = _OPTICAL_FRAME_ROTATION
-    if camera_yaw_offset_deg:
-        camera_correction = _quat_mul(_yaw_quat(camera_yaw_offset_deg), _OPTICAL_FRAME_ROTATION)
+    # Some recordings' sensor_extrinsics table uses a different "forward"
+    # axis convention than assumed for base_frame (visible as every sensor's
+    # translation/rotation facing exactly 90 degrees off from the vehicle's
+    # true heading). This corrective yaw is applied to every sensor's
+    # translation and rotation, before cameras additionally get rotated into
+    # the optical-frame convention below.
+    yaw_q = _yaw_quat(yaw_offset_deg) if yaw_offset_deg else None
 
     for sensor_name, row in extrinsics.iterrows():
         parent = str(row.get("reference_point") or base_frame)
+        tx, ty, tz = float(row["tx"]), float(row["ty"]), float(row["tz"])
         qx, qy, qz, qw = float(row["qx"]), float(row["qy"]), float(row["qz"]), float(row["qw"])
+        if yaw_q is not None:
+            tx, ty, tz = _rotate_vector(yaw_q, (tx, ty, tz))
+            qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), yaw_q)
         if sensor_name in camera_names:
-            qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), camera_correction)
+            qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), _OPTICAL_FRAME_ROTATION)
         builder.write_json(
             "/tf_static",
             "foxglove.FrameTransform",
@@ -202,7 +222,7 @@ def write_static_transforms(
                 "timestamp": _time_obj(t0),
                 "parent_frame_id": base_frame,
                 "child_frame_id": sensor_name,
-                "translation": {"x": float(row["tx"]), "y": float(row["ty"]), "z": float(row["tz"])},
+                "translation": {"x": tx, "y": ty, "z": tz},
                 "rotation": {"x": qx, "y": qy, "z": qz, "w": qw},
             },
         )
@@ -383,8 +403,25 @@ def write_lidar_frames(builder: McapBuilder, lidar: str, lidar_dir: Path, index_
     log.info("wrote %d frames for lidar %s", count, lidar)
 
 
-def write_trajectory(builder: McapBuilder, trajectory_parquet: Path, map_frame: str, base_frame: str):
+def _corrected_orientation(row: pd.Series, yaw_q: tuple[float, float, float, float] | None) -> dict:
+    qx, qy, qz, qw = float(row["qx"]), float(row["qy"]), float(row["qz"]), float(row["qw"])
+    if yaw_q is not None:
+        qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), yaw_q)
+    return {"x": qx, "y": qy, "z": qz, "w": qw}
+
+
+def write_trajectory(
+    builder: McapBuilder,
+    trajectory_parquet: Path,
+    map_frame: str,
+    base_frame: str,
+    yaw_offset_deg: float = 0.0,
+):
     df = pd.read_parquet(trajectory_parquet).sort_index()
+    # Translation is already in map-frame world coordinates, so only the
+    # orientation (which describes base_frame's own axes) needs the same
+    # heading correction used for sensor_extrinsics -- see write_static_transforms.
+    yaw_q = _yaw_quat(yaw_offset_deg) if yaw_offset_deg else None
     for timestamp_ns, row in df.iterrows():
         builder.write_json(
             "/tf",
@@ -396,31 +433,28 @@ def write_trajectory(builder: McapBuilder, trajectory_parquet: Path, map_frame: 
                 "parent_frame_id": map_frame,
                 "child_frame_id": base_frame,
                 "translation": {"x": float(row["tx"]), "y": float(row["ty"]), "z": float(row["tz"])},
-                "rotation": {
-                    "x": float(row["qx"]),
-                    "y": float(row["qy"]),
-                    "z": float(row["qz"]),
-                    "w": float(row["qw"]),
-                },
+                "rotation": _corrected_orientation(row, yaw_q),
             },
         )
     log.info("wrote %d trajectory poses", len(df))
 
 
-def write_trajectory_path(builder: McapBuilder, trajectory_parquet: Path, map_frame: str, t0: int):
+def write_trajectory_path(
+    builder: McapBuilder,
+    trajectory_parquet: Path,
+    map_frame: str,
+    t0: int,
+    yaw_offset_deg: float = 0.0,
+):
     """Write the whole trajectory as a single foxglove.PosesInFrame message so
     Foxglove's 3D panel can render it as a static path/trail, independent of
     playback position (unlike /tf, which only carries the current pose)."""
     df = pd.read_parquet(trajectory_parquet).sort_index()
+    yaw_q = _yaw_quat(yaw_offset_deg) if yaw_offset_deg else None
     poses = [
         {
             "position": {"x": float(row["tx"]), "y": float(row["ty"]), "z": float(row["tz"])},
-            "orientation": {
-                "x": float(row["qx"]),
-                "y": float(row["qy"]),
-                "z": float(row["qz"]),
-                "w": float(row["qw"]),
-            },
+            "orientation": _corrected_orientation(row, yaw_q),
         }
         for _, row in df.iterrows()
     ]
@@ -440,7 +474,7 @@ def convert(
     base_frame: str = "base_link",
     map_frame: str = "map",
     rectify_fov_deg: float = 90.0,
-    camera_yaw_offset_deg: float = 0.0,
+    yaw_offset_deg: float = 0.0,
 ):
     trajectory_root = input_dir / "trajectory"
     sequence_dirs = [p for p in trajectory_root.iterdir() if p.is_dir()] if trajectory_root.exists() else []
@@ -474,9 +508,7 @@ def convert(
             extrinsics_df = pd.read_parquet(extrinsics_path)
             per_sensor = find_calibration_row(extrinsics_df, sequence_id)
             if per_sensor is not None:
-                write_static_transforms(
-                    builder, per_sensor, base_frame, t0, camera_names, camera_yaw_offset_deg
-                )
+                write_static_transforms(builder, per_sensor, base_frame, t0, camera_names, yaw_offset_deg)
 
         intrinsics_dir = input_dir / "calibration" / "camera_intrinsic"
         intrinsics_rows: dict[str, pd.Series] = {}
@@ -522,8 +554,8 @@ def convert(
                 write_lidar_frames(builder, lidar, seq_dir, index_parquet)
 
         # --- trajectory ------------------------------------------------
-        write_trajectory(builder, trajectory_parquet, map_frame, base_frame)
-        write_trajectory_path(builder, trajectory_parquet, map_frame, t0)
+        write_trajectory(builder, trajectory_parquet, map_frame, base_frame, yaw_offset_deg)
+        write_trajectory_path(builder, trajectory_parquet, map_frame, t0, yaw_offset_deg)
 
         # --- recording metadata -----------------------------------------
         metadata_path = input_dir / "metadata.parquet"
@@ -556,14 +588,14 @@ def main():
         "cylindrical camera's images into /camera/{camera}/image_rect (default: 90.0)",
     )
     parser.add_argument(
-        "--camera-yaw-offset",
+        "--yaw-offset",
         type=float,
         default=0.0,
-        help="Extra rotation (degrees, about the sensor's own up axis) applied to every "
-        "camera's static transform on top of the built-in body-to-optical-frame "
-        "correction. Use this if cameras render facing 90 degrees away from the "
-        "vehicle's true forward direction in Foxglove's 3D panel -- try -90 or 90 "
-        "to converge on the right value for your recording (default: 0.0, no extra "
+        help="Extra rotation (degrees, about +Z/up) applied to every sensor_extrinsics "
+        "translation/rotation and every trajectory pose's orientation. Use this if "
+        "sensors and/or the trajectory render facing 90 degrees away from the "
+        "vehicle's true forward direction in Foxglove's 3D panel -- try -90 or 90 to "
+        "converge on the right value for your recording (default: 0.0, no extra "
         "correction)",
     )
     args = parser.parse_args()
@@ -573,7 +605,7 @@ def main():
         args.base_frame,
         args.map_frame,
         args.rectify_fov,
-        args.camera_yaw_offset,
+        args.yaw_offset,
     )
 
 
