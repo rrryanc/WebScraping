@@ -244,12 +244,13 @@ class TestFolderToMcap(unittest.TestCase):
             self.assertAlmostEqual(lidar["z"], 0.0)
             self.assertAlmostEqual(lidar["w"], 1.0)
 
-    def test_yaw_offset_rotates_every_sensors_translation_and_rotation(self):
-        # A --extrinsics-yaw-offset of 90 degrees should rotate every sensor's
-        # translation and rotation (fixture extrinsics are tx=3.13, ty=0,
-        # tz=1.3 with identity rotation for every sensor); cameras
-        # additionally get the optical-frame fix composed on top.
-        convert(self.input_dir, self.output_path, extrinsics_yaw_offset_deg=90.0)
+    def test_camera_yaw_offset_rotates_cameras_only(self):
+        # A --camera-yaw-offset of 90 degrees should rotate only camera
+        # sensors' translation and rotation (fixture extrinsics are tx=3.13,
+        # ty=0, tz=1.3 with identity rotation for every sensor); cameras
+        # additionally get the optical-frame fix composed on top. RefLidar
+        # (not a camera) should be untouched.
+        convert(self.input_dir, self.output_path, camera_yaw_offset_deg=90.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             translations = {}
@@ -260,7 +261,7 @@ class TestFolderToMcap(unittest.TestCase):
                 rotations[obj["child_frame_id"]] = obj["rotation"]
 
             # Rotating (3.13, 0, 1.3) by 90 degrees about +Z gives (0, 3.13, 1.3).
-            for sensor in ["FC1", "TVfront", "RefLidar"]:
+            for sensor in ["FC1", "TVfront"]:
                 t = translations[sensor]
                 self.assertAlmostEqual(t["x"], 0.0, places=6)
                 self.assertAlmostEqual(t["y"], 3.13, places=6)
@@ -274,17 +275,42 @@ class TestFolderToMcap(unittest.TestCase):
             self.assertAlmostEqual(fc1["z"], 0.0)
             self.assertAlmostEqual(fc1["w"], 0.7071067811865476)
 
-            # Non-camera sensors get just the 90-degree yaw, no optical fix.
+            # RefLidar is untouched by --camera-yaw-offset.
+            self.assertEqual(translations["RefLidar"], {"x": 3.13, "y": 0.0, "z": 1.3})
+            self.assertEqual(rotations["RefLidar"], {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0})
+
+    def test_lidar_yaw_offset_rotates_non_cameras_only(self):
+        # A --lidar-yaw-offset of 90 degrees should rotate only non-camera
+        # sensors (RefLidar), with no optical-frame fix applied; cameras
+        # should be untouched.
+        convert(self.input_dir, self.output_path, lidar_yaw_offset_deg=90.0)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            translations = {}
+            rotations = {}
+            for _schema, _channel, message in reader.iter_messages(topics=["/tf_static"]):
+                obj = json.loads(message.data)
+                translations[obj["child_frame_id"]] = obj["translation"]
+                rotations[obj["child_frame_id"]] = obj["rotation"]
+
+            t = translations["RefLidar"]
+            self.assertAlmostEqual(t["x"], 0.0, places=6)
+            self.assertAlmostEqual(t["y"], 3.13, places=6)
+            self.assertAlmostEqual(t["z"], 1.3, places=6)
             lidar = rotations["RefLidar"]
             self.assertAlmostEqual(lidar["x"], 0.0)
             self.assertAlmostEqual(lidar["y"], 0.0)
             self.assertAlmostEqual(lidar["z"], 0.7071067811865476)
             self.assertAlmostEqual(lidar["w"], 0.7071067811865476)
 
+            # Cameras are untouched by --lidar-yaw-offset.
+            self.assertEqual(translations["FC1"], {"x": 3.13, "y": 0.0, "z": 1.3})
+            self.assertEqual(rotations["FC1"], {"x": -0.5, "y": 0.5, "z": -0.5, "w": 0.5})
+
     def test_yaw_offset_rotates_trajectory_orientation_only(self):
         # Trajectory translation is already in map-frame world coordinates
         # and should be untouched; only the orientation gets the yaw fix, and
-        # it's controlled independently of --extrinsics-yaw-offset.
+        # it's controlled independently of --camera-yaw-offset/--lidar-yaw-offset.
         convert(self.input_dir, self.output_path, trajectory_yaw_offset_deg=90.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
@@ -297,19 +323,38 @@ class TestFolderToMcap(unittest.TestCase):
             # composed with a 90-degree yaw it should differ from the raw value.
             self.assertNotAlmostEqual(pose0["orientation"]["z"], 0.945, places=3)
 
-    def test_extrinsics_and_trajectory_yaw_offsets_are_independent(self):
-        # Setting --trajectory-yaw-offset should not perturb sensor_extrinsics
-        # transforms, and vice versa.
+    def test_yaw_offsets_are_all_independent(self):
+        # Setting any one of --camera-yaw-offset/--lidar-yaw-offset/
+        # --trajectory-yaw-offset should not perturb the other two.
         convert(self.input_dir, self.output_path, trajectory_yaw_offset_deg=90.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
-            _schema, _channel, message = next(reader.iter_messages(topics=["/tf_static"]))
-            obj = json.loads(message.data)
-            self.assertEqual(obj["rotation"], {"x": -0.5, "y": 0.5, "z": -0.5, "w": 0.5})
+            rotations = {}
+            for _schema, _channel, message in reader.iter_messages(topics=["/tf_static"]):
+                obj = json.loads(message.data)
+                rotations[obj["child_frame_id"]] = obj["rotation"]
+            self.assertEqual(rotations["FC1"], {"x": -0.5, "y": 0.5, "z": -0.5, "w": 0.5})
+            self.assertEqual(rotations["RefLidar"], {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0})
 
-        convert(self.input_dir, self.output_path, extrinsics_yaw_offset_deg=90.0)
+        convert(self.input_dir, self.output_path, camera_yaw_offset_deg=90.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
+            for _schema, _channel, message in reader.iter_messages(topics=["/tf_static"]):
+                obj = json.loads(message.data)
+                if obj["child_frame_id"] == "RefLidar":
+                    self.assertEqual(obj["rotation"], {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0})
+            _schema, _channel, message = next(reader.iter_messages(topics=["/trajectory/path"]))
+            obj = json.loads(message.data)
+            self.assertAlmostEqual(obj["poses"][0]["orientation"]["z"], 0.945)
+            self.assertAlmostEqual(obj["poses"][0]["orientation"]["w"], -0.326)
+
+        convert(self.input_dir, self.output_path, lidar_yaw_offset_deg=90.0)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            for _schema, _channel, message in reader.iter_messages(topics=["/tf_static"]):
+                obj = json.loads(message.data)
+                if obj["child_frame_id"] == "FC1":
+                    self.assertEqual(obj["rotation"], {"x": -0.5, "y": 0.5, "z": -0.5, "w": 0.5})
             _schema, _channel, message = next(reader.iter_messages(topics=["/trajectory/path"]))
             obj = json.loads(message.data)
             self.assertAlmostEqual(obj["poses"][0]["orientation"]["z"], 0.945)

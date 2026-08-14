@@ -194,26 +194,29 @@ def write_static_transforms(
     base_frame: str,
     t0: int,
     camera_names: set[str] = frozenset(),
-    yaw_offset_deg: float = 0.0,
+    camera_yaw_offset_deg: float = 0.0,
+    lidar_yaw_offset_deg: float = 0.0,
 ):
-    # Some recordings' sensor_extrinsics table uses a different "forward"
-    # axis convention than assumed for base_frame (visible as every sensor's
-    # translation/rotation facing exactly 90 degrees off from the vehicle's
-    # true heading). This corrective yaw is applied to every sensor's
-    # translation and rotation, before cameras additionally get rotated into
-    # the optical-frame convention below. Independent of trajectory.parquet's
-    # own convention (see write_trajectory), since the two may come from
-    # different pipelines and not share the same fix.
-    yaw_q = _yaw_quat(yaw_offset_deg) if yaw_offset_deg else None
+    # Cameras and lidar are independent physical mounts in sensor_extrinsics
+    # and may each carry their own calibration error (e.g. real data showed
+    # every camera's raw rotation already correct against the vehicle's true
+    # heading, while the lidar's raw rotation alone had a genuine ~90 degree
+    # error) -- so these are two separate, independently tunable corrections,
+    # not one shared knob. Independent of trajectory.parquet's own heading
+    # convention too (see write_trajectory).
+    camera_yaw_q = _yaw_quat(camera_yaw_offset_deg) if camera_yaw_offset_deg else None
+    lidar_yaw_q = _yaw_quat(lidar_yaw_offset_deg) if lidar_yaw_offset_deg else None
 
     for sensor_name, row in extrinsics.iterrows():
         parent = str(row.get("reference_point") or base_frame)
         tx, ty, tz = float(row["tx"]), float(row["ty"]), float(row["tz"])
         qx, qy, qz, qw = float(row["qx"]), float(row["qy"]), float(row["qz"]), float(row["qw"])
+        is_camera = sensor_name in camera_names
+        yaw_q = camera_yaw_q if is_camera else lidar_yaw_q
         if yaw_q is not None:
             tx, ty, tz = _rotate_vector(yaw_q, (tx, ty, tz))
             qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), yaw_q)
-        if sensor_name in camera_names:
+        if is_camera:
             qx, qy, qz, qw = _quat_mul((qx, qy, qz, qw), _OPTICAL_FRAME_ROTATION)
         builder.write_json(
             "/tf_static",
@@ -476,7 +479,8 @@ def convert(
     base_frame: str = "base_link",
     map_frame: str = "map",
     rectify_fov_deg: float = 90.0,
-    extrinsics_yaw_offset_deg: float = 0.0,
+    camera_yaw_offset_deg: float = 0.0,
+    lidar_yaw_offset_deg: float = 0.0,
     trajectory_yaw_offset_deg: float = 0.0,
 ):
     trajectory_root = input_dir / "trajectory"
@@ -512,7 +516,13 @@ def convert(
             per_sensor = find_calibration_row(extrinsics_df, sequence_id)
             if per_sensor is not None:
                 write_static_transforms(
-                    builder, per_sensor, base_frame, t0, camera_names, extrinsics_yaw_offset_deg
+                    builder,
+                    per_sensor,
+                    base_frame,
+                    t0,
+                    camera_names,
+                    camera_yaw_offset_deg,
+                    lidar_yaw_offset_deg,
                 )
 
         intrinsics_dir = input_dir / "calibration" / "camera_intrinsic"
@@ -593,25 +603,35 @@ def main():
         "cylindrical camera's images into /camera/{camera}/image_rect (default: 90.0)",
     )
     parser.add_argument(
-        "--extrinsics-yaw-offset",
+        "--camera-yaw-offset",
         type=float,
         default=0.0,
-        help="Extra rotation (degrees, about +Z/up) applied to every sensor_extrinsics "
-        "translation/rotation (cameras and lidar). Use this if sensors render facing "
-        "(or positioned) 90 degrees away from the vehicle's true forward direction in "
-        "Foxglove's 3D panel -- try -90 or 90 to converge on the right value for your "
-        "recording (default: 0.0, no extra correction)",
+        help="Extra rotation (degrees, about +Z/up) applied to every camera's "
+        "sensor_extrinsics translation/rotation, on top of the built-in "
+        "body-to-optical-frame correction. Use this if cameras render facing (or "
+        "positioned) away from the vehicle's true forward direction in Foxglove's "
+        "3D panel (default: 0.0, no extra correction)",
+    )
+    parser.add_argument(
+        "--lidar-yaw-offset",
+        type=float,
+        default=0.0,
+        help="Extra rotation (degrees, about +Z/up) applied to every non-camera "
+        "sensor's (lidar's) sensor_extrinsics translation/rotation. Cameras and "
+        "lidar are independent physical mounts and may each need their own "
+        "correction, so this is tunable separately from --camera-yaw-offset "
+        "(default: 0.0, no extra correction)",
     )
     parser.add_argument(
         "--trajectory-yaw-offset",
         type=float,
         default=0.0,
         help="Extra rotation (degrees, about +Z/up) applied to every trajectory pose's "
-        "orientation only (not sensor_extrinsics -- see --extrinsics-yaw-offset). "
-        "trajectory.parquet may come from a different pipeline with its own heading "
-        "convention, so this is independently tunable. Use this if the vehicle's "
-        "declared heading doesn't match its actual direction of travel (default: 0.0, "
-        "no extra correction)",
+        "orientation only (not sensor_extrinsics -- see --camera-yaw-offset / "
+        "--lidar-yaw-offset). trajectory.parquet may come from a different pipeline "
+        "with its own heading convention, so this is independently tunable. Use this "
+        "if the vehicle's declared heading doesn't match its actual direction of "
+        "travel (default: 0.0, no extra correction)",
     )
     args = parser.parse_args()
     convert(
@@ -620,7 +640,8 @@ def main():
         args.base_frame,
         args.map_frame,
         args.rectify_fov,
-        args.extrinsics_yaw_offset,
+        args.camera_yaw_offset,
+        args.lidar_yaw_offset,
         args.trajectory_yaw_offset,
     )
 
