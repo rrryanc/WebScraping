@@ -245,11 +245,11 @@ class TestFolderToMcap(unittest.TestCase):
             self.assertAlmostEqual(lidar["w"], 1.0)
 
     def test_yaw_offset_rotates_every_sensors_translation_and_rotation(self):
-        # A --yaw-offset of 90 degrees should rotate every sensor's
+        # A --extrinsics-yaw-offset of 90 degrees should rotate every sensor's
         # translation and rotation (fixture extrinsics are tx=3.13, ty=0,
         # tz=1.3 with identity rotation for every sensor); cameras
         # additionally get the optical-frame fix composed on top.
-        convert(self.input_dir, self.output_path, yaw_offset_deg=90.0)
+        convert(self.input_dir, self.output_path, extrinsics_yaw_offset_deg=90.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             translations = {}
@@ -283,8 +283,9 @@ class TestFolderToMcap(unittest.TestCase):
 
     def test_yaw_offset_rotates_trajectory_orientation_only(self):
         # Trajectory translation is already in map-frame world coordinates
-        # and should be untouched; only the orientation gets the same yaw fix.
-        convert(self.input_dir, self.output_path, yaw_offset_deg=90.0)
+        # and should be untouched; only the orientation gets the yaw fix, and
+        # it's controlled independently of --extrinsics-yaw-offset.
+        convert(self.input_dir, self.output_path, trajectory_yaw_offset_deg=90.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             _schema, _channel, message = next(reader.iter_messages(topics=["/trajectory/path"]))
@@ -295,6 +296,24 @@ class TestFolderToMcap(unittest.TestCase):
             # Fixture trajectory rotation is (-0.0142, 0.0011, 0.945, -0.326);
             # composed with a 90-degree yaw it should differ from the raw value.
             self.assertNotAlmostEqual(pose0["orientation"]["z"], 0.945, places=3)
+
+    def test_extrinsics_and_trajectory_yaw_offsets_are_independent(self):
+        # Setting --trajectory-yaw-offset should not perturb sensor_extrinsics
+        # transforms, and vice versa.
+        convert(self.input_dir, self.output_path, trajectory_yaw_offset_deg=90.0)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            _schema, _channel, message = next(reader.iter_messages(topics=["/tf_static"]))
+            obj = json.loads(message.data)
+            self.assertEqual(obj["rotation"], {"x": -0.5, "y": 0.5, "z": -0.5, "w": 0.5})
+
+        convert(self.input_dir, self.output_path, extrinsics_yaw_offset_deg=90.0)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            _schema, _channel, message = next(reader.iter_messages(topics=["/trajectory/path"]))
+            obj = json.loads(message.data)
+            self.assertAlmostEqual(obj["poses"][0]["orientation"]["z"], 0.945)
+            self.assertAlmostEqual(obj["poses"][0]["orientation"]["w"], -0.326)
 
     def test_trajectory_path_contains_all_poses(self):
         convert(self.input_dir, self.output_path)

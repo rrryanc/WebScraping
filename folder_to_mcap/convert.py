@@ -201,7 +201,9 @@ def write_static_transforms(
     # translation/rotation facing exactly 90 degrees off from the vehicle's
     # true heading). This corrective yaw is applied to every sensor's
     # translation and rotation, before cameras additionally get rotated into
-    # the optical-frame convention below.
+    # the optical-frame convention below. Independent of trajectory.parquet's
+    # own convention (see write_trajectory), since the two may come from
+    # different pipelines and not share the same fix.
     yaw_q = _yaw_quat(yaw_offset_deg) if yaw_offset_deg else None
 
     for sensor_name, row in extrinsics.iterrows():
@@ -474,7 +476,8 @@ def convert(
     base_frame: str = "base_link",
     map_frame: str = "map",
     rectify_fov_deg: float = 90.0,
-    yaw_offset_deg: float = 0.0,
+    extrinsics_yaw_offset_deg: float = 0.0,
+    trajectory_yaw_offset_deg: float = 0.0,
 ):
     trajectory_root = input_dir / "trajectory"
     sequence_dirs = [p for p in trajectory_root.iterdir() if p.is_dir()] if trajectory_root.exists() else []
@@ -508,7 +511,9 @@ def convert(
             extrinsics_df = pd.read_parquet(extrinsics_path)
             per_sensor = find_calibration_row(extrinsics_df, sequence_id)
             if per_sensor is not None:
-                write_static_transforms(builder, per_sensor, base_frame, t0, camera_names, yaw_offset_deg)
+                write_static_transforms(
+                    builder, per_sensor, base_frame, t0, camera_names, extrinsics_yaw_offset_deg
+                )
 
         intrinsics_dir = input_dir / "calibration" / "camera_intrinsic"
         intrinsics_rows: dict[str, pd.Series] = {}
@@ -554,8 +559,8 @@ def convert(
                 write_lidar_frames(builder, lidar, seq_dir, index_parquet)
 
         # --- trajectory ------------------------------------------------
-        write_trajectory(builder, trajectory_parquet, map_frame, base_frame, yaw_offset_deg)
-        write_trajectory_path(builder, trajectory_parquet, map_frame, t0, yaw_offset_deg)
+        write_trajectory(builder, trajectory_parquet, map_frame, base_frame, trajectory_yaw_offset_deg)
+        write_trajectory_path(builder, trajectory_parquet, map_frame, t0, trajectory_yaw_offset_deg)
 
         # --- recording metadata -----------------------------------------
         metadata_path = input_dir / "metadata.parquet"
@@ -588,15 +593,25 @@ def main():
         "cylindrical camera's images into /camera/{camera}/image_rect (default: 90.0)",
     )
     parser.add_argument(
-        "--yaw-offset",
+        "--extrinsics-yaw-offset",
         type=float,
         default=0.0,
         help="Extra rotation (degrees, about +Z/up) applied to every sensor_extrinsics "
-        "translation/rotation and every trajectory pose's orientation. Use this if "
-        "sensors and/or the trajectory render facing 90 degrees away from the "
-        "vehicle's true forward direction in Foxglove's 3D panel -- try -90 or 90 to "
-        "converge on the right value for your recording (default: 0.0, no extra "
-        "correction)",
+        "translation/rotation (cameras and lidar). Use this if sensors render facing "
+        "(or positioned) 90 degrees away from the vehicle's true forward direction in "
+        "Foxglove's 3D panel -- try -90 or 90 to converge on the right value for your "
+        "recording (default: 0.0, no extra correction)",
+    )
+    parser.add_argument(
+        "--trajectory-yaw-offset",
+        type=float,
+        default=0.0,
+        help="Extra rotation (degrees, about +Z/up) applied to every trajectory pose's "
+        "orientation only (not sensor_extrinsics -- see --extrinsics-yaw-offset). "
+        "trajectory.parquet may come from a different pipeline with its own heading "
+        "convention, so this is independently tunable. Use this if the vehicle's "
+        "declared heading doesn't match its actual direction of travel (default: 0.0, "
+        "no extra correction)",
     )
     args = parser.parse_args()
     convert(
@@ -605,7 +620,8 @@ def main():
         args.base_frame,
         args.map_frame,
         args.rectify_fov,
-        args.yaw_offset,
+        args.extrinsics_yaw_offset,
+        args.trajectory_yaw_offset,
     )
 
 
