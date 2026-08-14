@@ -159,7 +159,9 @@ class TestFolderToMcap(unittest.TestCase):
     def test_falls_back_to_nearest_same_vin_calibration(self):
         # The target sequence_id is deliberately absent from the calibration
         # tables; conversion should still succeed using NEAR_SEQ's values.
-        convert(self.input_dir, self.output_path)
+        # lidar_yaw_offset_deg=0 isolates this from the real dataset's default
+        # lidar correction, which would otherwise rotate RefLidar's translation.
+        convert(self.input_dir, self.output_path, lidar_yaw_offset_deg=0.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             for _schema, channel, message in reader.iter_messages(topics=["/tf_static"]):
@@ -224,7 +226,9 @@ class TestFolderToMcap(unittest.TestCase):
         # (body-mount convention). Cameras should come out rotated into the
         # fixed optical convention (X-right, Y-down, Z-forward); RefLidar
         # (not a camera) should be left as the untouched identity rotation.
-        convert(self.input_dir, self.output_path)
+        # lidar_yaw_offset_deg=0 isolates this from the real dataset's default
+        # lidar correction.
+        convert(self.input_dir, self.output_path, lidar_yaw_offset_deg=0.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             rotations = {}
@@ -249,8 +253,9 @@ class TestFolderToMcap(unittest.TestCase):
         # sensors' translation and rotation (fixture extrinsics are tx=3.13,
         # ty=0, tz=1.3 with identity rotation for every sensor); cameras
         # additionally get the optical-frame fix composed on top. RefLidar
-        # (not a camera) should be untouched.
-        convert(self.input_dir, self.output_path, camera_yaw_offset_deg=90.0)
+        # (not a camera) should be untouched. lidar_yaw_offset_deg=0 isolates
+        # this from the real dataset's default lidar correction.
+        convert(self.input_dir, self.output_path, camera_yaw_offset_deg=90.0, lidar_yaw_offset_deg=0.0)
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             translations = {}
@@ -325,8 +330,16 @@ class TestFolderToMcap(unittest.TestCase):
 
     def test_yaw_offsets_are_all_independent(self):
         # Setting any one of --camera-yaw-offset/--lidar-yaw-offset/
-        # --trajectory-yaw-offset should not perturb the other two.
-        convert(self.input_dir, self.output_path, trajectory_yaw_offset_deg=90.0)
+        # --trajectory-yaw-offset should not perturb the other two. The other
+        # two are explicitly zeroed in each call since the real dataset's
+        # defaults for lidar/trajectory are no longer zero.
+        convert(
+            self.input_dir,
+            self.output_path,
+            camera_yaw_offset_deg=0.0,
+            lidar_yaw_offset_deg=0.0,
+            trajectory_yaw_offset_deg=90.0,
+        )
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             rotations = {}
@@ -336,7 +349,13 @@ class TestFolderToMcap(unittest.TestCase):
             self.assertEqual(rotations["FC1"], {"x": -0.5, "y": 0.5, "z": -0.5, "w": 0.5})
             self.assertEqual(rotations["RefLidar"], {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0})
 
-        convert(self.input_dir, self.output_path, camera_yaw_offset_deg=90.0)
+        convert(
+            self.input_dir,
+            self.output_path,
+            camera_yaw_offset_deg=90.0,
+            lidar_yaw_offset_deg=0.0,
+            trajectory_yaw_offset_deg=0.0,
+        )
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             for _schema, _channel, message in reader.iter_messages(topics=["/tf_static"]):
@@ -348,7 +367,13 @@ class TestFolderToMcap(unittest.TestCase):
             self.assertAlmostEqual(obj["poses"][0]["orientation"]["z"], 0.945)
             self.assertAlmostEqual(obj["poses"][0]["orientation"]["w"], -0.326)
 
-        convert(self.input_dir, self.output_path, lidar_yaw_offset_deg=90.0)
+        convert(
+            self.input_dir,
+            self.output_path,
+            camera_yaw_offset_deg=0.0,
+            lidar_yaw_offset_deg=90.0,
+            trajectory_yaw_offset_deg=0.0,
+        )
         with open(self.output_path, "rb") as f:
             reader = make_reader(f)
             for _schema, _channel, message in reader.iter_messages(topics=["/tf_static"]):

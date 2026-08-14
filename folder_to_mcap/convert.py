@@ -480,8 +480,8 @@ def convert(
     map_frame: str = "map",
     rectify_fov_deg: float = 90.0,
     camera_yaw_offset_deg: float = 0.0,
-    lidar_yaw_offset_deg: float = 0.0,
-    trajectory_yaw_offset_deg: float = 0.0,
+    lidar_yaw_offset_deg: float = 90.0,
+    trajectory_yaw_offset_deg: float = 180.0,
 ):
     trajectory_root = input_dir / "trajectory"
     sequence_dirs = [p for p in trajectory_root.iterdir() if p.is_dir()] if trajectory_root.exists() else []
@@ -615,23 +615,25 @@ def main():
     parser.add_argument(
         "--lidar-yaw-offset",
         type=float,
-        default=0.0,
+        default=90.0,
         help="Extra rotation (degrees, about +Z/up) applied to every non-camera "
         "sensor's (lidar's) sensor_extrinsics translation/rotation. Cameras and "
         "lidar are independent physical mounts and may each need their own "
         "correction, so this is tunable separately from --camera-yaw-offset "
-        "(default: 0.0, no extra correction)",
+        "(default: 90.0, matches this vehicle's real lidar mounting error; pass 0 "
+        "to disable)",
     )
     parser.add_argument(
         "--trajectory-yaw-offset",
         type=float,
-        default=0.0,
+        default=180.0,
         help="Extra rotation (degrees, about +Z/up) applied to every trajectory pose's "
         "orientation only (not sensor_extrinsics -- see --camera-yaw-offset / "
         "--lidar-yaw-offset). trajectory.parquet may come from a different pipeline "
         "with its own heading convention, so this is independently tunable. Use this "
         "if the vehicle's declared heading doesn't match its actual direction of "
-        "travel (default: 0.0, no extra correction)",
+        "travel (default: 180.0, matches this dataset's trajectory heading "
+        "convention; pass 0 to disable)",
     )
     args = parser.parse_args()
     convert(
