@@ -1,0 +1,169 @@
+"""Tests for the hdf5_convert conversion tool."""
+
+import json
+import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+import h5py
+import numpy as np
+from mcap.reader import make_reader
+
+from folder_to_mcap.hdf5_convert import convert
+
+T0_NS = 1781767357923038976
+DT_NS = 66670000
+
+
+def _build_fixture(path: Path):
+    with h5py.File(path, "w") as f:
+        header_dtype = np.dtype(
+            [
+                ("data_timestamp", [("ns", [("m_value", "<i8")])]),
+            ]
+        )
+        optional_u4 = np.dtype(
+            [
+                (
+                    "m_memory",
+                    {
+                        "names": ["m_union", "m_has_value"],
+                        "formats": [[("m_data", "<u4")], "?"],
+                        "offsets": [0, 4],
+                        "itemsize": 8,
+                    },
+                )
+            ]
+        )
+        detection_dtype = np.dtype(
+            [
+                ("range_m", "<f4"),
+                ("nested_optional", optional_u4),
+                ("sub_array", "<f4", (3,)),
+                ("label", "S8"),
+            ]
+        )
+        data_dtype = np.dtype(
+            [
+                ("header", header_dtype),
+                ("count", "<u4"),
+                ("detections", detection_dtype, (2,)),
+            ]
+        )
+        frame_dtype = np.dtype([("time", "<f8"), ("index", "<u4"), ("msg_seq_number", "<i8")])
+
+        n = 4
+        data = np.zeros(n, dtype=data_dtype)
+        frame = np.zeros(n, dtype=frame_dtype)
+        for i in range(n):
+            ts_ns = T0_NS + i * DT_NS
+            data[i]["header"]["data_timestamp"]["ns"]["m_value"] = ts_ns
+            data[i]["count"] = 2
+            for j in range(2):
+                data[i]["detections"][j]["range_m"] = 10.0 + j
+                data[i]["detections"][j]["nested_optional"]["m_memory"]["m_has_value"] = j % 2 == 0
+                data[i]["detections"][j]["nested_optional"]["m_memory"]["m_union"]["m_data"] = j * 10
+                data[i]["detections"][j]["sub_array"] = [j, j * 2, j * 3]
+                data[i]["detections"][j]["label"] = f"obj{j}".encode()
+            frame[i]["time"] = ts_ns / 1e9
+            frame[i]["index"] = i
+            frame[i]["msg_seq_number"] = 1000 + i
+
+        grp = f.create_group("aos/activities/fake_radar/outputs/detections")
+        grp.create_dataset("data", data=data)
+        grp.create_dataset("frame", data=frame)
+        grp.create_group("flags")
+        grp.create_dataset("class_info_blob", data=np.zeros(10, dtype="u1"))
+        grp.create_dataset("class_info_json", data=np.zeros(10, dtype="u1"))
+
+        simple_dtype = np.dtype([("value", "<f8")])
+        frame2 = np.zeros(3, dtype=frame_dtype)
+        data2 = np.zeros(3, dtype=simple_dtype)
+        for i in range(3):
+            data2[i]["value"] = i * 1.5
+            frame2[i]["time"] = 1781767357.0 + i
+        grp2 = f.create_group("aos/activities/no_header_signal/outputs/simple")
+        grp2.create_dataset("data", data=data2)
+        grp2.create_dataset("frame", data=frame2)
+
+        # Not a signal group (no data+frame pair): should be skipped.
+        f.create_group("meta/settings")
+
+
+class TestHdf5Convert(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
+        self.input_path = self.tmpdir / "input.h5"
+        self.output_path = self.tmpdir / "out.mcap"
+        _build_fixture(self.input_path)
+
+    def test_finds_only_signal_groups(self):
+        convert(self.input_path, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            topics = {ch.topic for ch in reader.get_summary().channels.values()}
+            self.assertEqual(
+                topics,
+                {
+                    "/aos/activities/fake_radar/outputs/detections",
+                    "/aos/activities/no_header_signal/outputs/simple",
+                },
+            )
+
+    def test_message_counts_match_record_counts(self):
+        convert(self.input_path, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            counts = {
+                ch.topic: reader.get_summary().statistics.channel_message_counts[ch_id]
+                for ch_id, ch in reader.get_summary().channels.items()
+            }
+            self.assertEqual(counts["/aos/activities/fake_radar/outputs/detections"], 4)
+            self.assertEqual(counts["/aos/activities/no_header_signal/outputs/simple"], 3)
+
+    def test_uses_header_timestamp_when_present(self):
+        convert(self.input_path, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            log_times = [
+                message.log_time
+                for _schema, channel, message in reader.iter_messages(
+                    topics=["/aos/activities/fake_radar/outputs/detections"]
+                )
+            ]
+            self.assertEqual(sorted(log_times), [T0_NS + i * DT_NS for i in range(4)])
+
+    def test_falls_back_to_frame_time_without_header(self):
+        convert(self.input_path, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            log_times = [
+                message.log_time
+                for _schema, channel, message in reader.iter_messages(
+                    topics=["/aos/activities/no_header_signal/outputs/simple"]
+                )
+            ]
+            self.assertEqual(sorted(log_times), [1781767357_000000000 + i * 1_000000000 for i in range(3)])
+
+    def test_nested_unions_and_sub_arrays_decode(self):
+        convert(self.input_path, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            _schema, _channel, message = next(
+                reader.iter_messages(topics=["/aos/activities/fake_radar/outputs/detections"])
+            )
+            obj = json.loads(message.data)
+            self.assertEqual(obj["count"], 2)
+            det0, det1 = obj["detections"]
+            self.assertAlmostEqual(det0["range_m"], 10.0)
+            self.assertEqual(det0["label"], "obj0")
+            self.assertEqual(det0["sub_array"], [0.0, 0.0, 0.0])
+            self.assertTrue(det0["nested_optional"]["m_memory"]["m_has_value"])
+            self.assertFalse(det1["nested_optional"]["m_memory"]["m_has_value"])
+            self.assertEqual(det1["sub_array"], [1.0, 2.0, 3.0])
+
+
+if __name__ == "__main__":
+    unittest.main()
