@@ -129,6 +129,8 @@ def convert(input_path: Path, output_path: Path, limit: int | None = None):
             channel_id = writer.register_channel(topic=topic, message_encoding="json", schema_id=schema_id)
 
             count = 0
+            consecutive_failures = 0
+            max_consecutive_failures = 5
             for idx in range(n):
                 try:
                     record_dict = _record_to_dict(data[idx])
@@ -139,9 +141,22 @@ def convert(input_path: Path, output_path: Path, limit: int | None = None):
                         publish_time=ts_ns,
                         data=json.dumps(record_dict).encode("utf-8"),
                     )
-                except Exception:
-                    log.exception("failed to convert %s[%d]; skipping", path, idx)
+                except Exception as e:
+                    consecutive_failures += 1
+                    if consecutive_failures == 1:
+                        log.exception("failed to convert %s[%d]; skipping", path, idx)
+                    else:
+                        log.warning("failed to convert %s[%d]: %s", path, idx, e)
+                    if consecutive_failures >= max_consecutive_failures:
+                        log.warning(
+                            "%s: %d consecutive failures, giving up on remaining %d records",
+                            path,
+                            consecutive_failures,
+                            n - idx - 1,
+                        )
+                        break
                     continue
+                consecutive_failures = 0
                 count += 1
             total_messages += count
             log.info("[%d/%d] wrote %d messages for %s", i + 1, len(signal_paths), count, topic)

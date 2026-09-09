@@ -5,12 +5,14 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import h5py
 import numpy as np
 from mcap.reader import make_reader
 
-from folder_to_mcap.hdf5_convert import convert
+from folder_to_mcap import hdf5_convert
+from folder_to_mcap.hdf5_convert import convert, _record_to_dict
 
 T0_NS = 1781767357923038976
 DT_NS = 66670000
@@ -163,6 +165,46 @@ class TestHdf5Convert(unittest.TestCase):
             self.assertTrue(det0["nested_optional"]["m_memory"]["m_has_value"])
             self.assertFalse(det1["nested_optional"]["m_memory"]["m_has_value"])
             self.assertEqual(det1["sub_array"], [1.0, 2.0, 3.0])
+
+    def test_gives_up_on_signal_after_consecutive_failures(self):
+        # A signal with 10 records where records 2-7 (six in a row) fail to
+        # convert should stop after 5 consecutive failures rather than
+        # grinding through the rest -- record 8/9 (which would succeed) are
+        # never reached, and only the first two successful records land in
+        # the MCAP.
+        simple_dtype = np.dtype([("value", "<f8")])
+        frame_dtype = np.dtype([("time", "<f8"), ("index", "<u4"), ("msg_seq_number", "<i8")])
+        n = 10
+        data = np.zeros(n, dtype=simple_dtype)
+        frame = np.zeros(n, dtype=frame_dtype)
+        for i in range(n):
+            data[i]["value"] = float(i)
+            frame[i]["time"] = 1781767357.0 + i
+
+        flaky_path = self.tmpdir / "flaky.h5"
+        with h5py.File(flaky_path, "w") as f:
+            grp = f.create_group("aos/activities/flaky/outputs/signal")
+            grp.create_dataset("data", data=data)
+            grp.create_dataset("frame", data=frame)
+
+        call_count = {"n": 0}
+
+        def flaky_record_to_dict(record):
+            call_count["n"] += 1
+            if 3 <= call_count["n"] <= 8:
+                raise ValueError("simulated failure")
+            return _record_to_dict(record)
+
+        with patch.object(hdf5_convert, "_record_to_dict", side_effect=flaky_record_to_dict):
+            convert(flaky_path, self.output_path)
+
+        self.assertEqual(call_count["n"], 7)  # 2 successes + 5 consecutive failures, then gave up
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            messages = list(reader.iter_messages(topics=["/aos/activities/flaky/outputs/signal"]))
+            self.assertEqual(len(messages), 2)
+            values = sorted(json.loads(m.data)["value"] for _s, _c, m in messages)
+            self.assertEqual(values, [0.0, 1.0])
 
 
 if __name__ == "__main__":
