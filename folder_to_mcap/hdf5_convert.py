@@ -129,6 +129,8 @@ def convert(input_path: Path, output_path: Path, limit: int | None = None):
             channel_id = writer.register_channel(topic=topic, message_encoding="json", schema_id=schema_id)
 
             count = 0
+            error_count = 0
+            first_error = None
             consecutive_failures = 0
             max_consecutive_failures = 5
             for idx in range(n):
@@ -142,24 +144,30 @@ def convert(input_path: Path, output_path: Path, limit: int | None = None):
                         data=json.dumps(record_dict).encode("utf-8"),
                     )
                 except Exception as e:
+                    error_count += 1
                     consecutive_failures += 1
-                    if consecutive_failures == 1:
-                        log.exception("failed to convert %s[%d]; skipping", path, idx)
-                    else:
-                        log.warning("failed to convert %s[%d]: %s", path, idx, e)
+                    if first_error is None:
+                        first_error = f"{path}[{idx}]: {e}"
                     if consecutive_failures >= max_consecutive_failures:
-                        log.warning(
-                            "%s: %d consecutive failures, giving up on remaining %d records",
-                            path,
-                            consecutive_failures,
-                            n - idx - 1,
-                        )
                         break
                     continue
                 consecutive_failures = 0
                 count += 1
             total_messages += count
-            log.info("[%d/%d] wrote %d messages for %s", i + 1, len(signal_paths), count, topic)
+
+            if error_count:
+                log.warning(
+                    "[%d/%d] wrote %d/%d messages for %s (%d failed; first error: %s)",
+                    i + 1,
+                    len(signal_paths),
+                    count,
+                    n,
+                    topic,
+                    error_count,
+                    first_error,
+                )
+            else:
+                log.info("[%d/%d] wrote %d messages for %s", i + 1, len(signal_paths), count, topic)
 
         writer.finish()
     log.info("wrote %s (%d topics, %d messages)", output_path, len(signal_paths), total_messages)
