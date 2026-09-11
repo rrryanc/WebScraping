@@ -12,7 +12,7 @@ import numpy as np
 from mcap.reader import make_reader
 
 from folder_to_mcap import hdf5_convert
-from folder_to_mcap.hdf5_convert import convert, _record_to_dict
+from folder_to_mcap.hdf5_convert import convert, _extract_timestamp_ns, _record_to_dict
 
 T0_NS = 1781767357923038976
 DT_NS = 66670000
@@ -237,6 +237,22 @@ class TestHdf5Convert(unittest.TestCase):
             self.assertEqual(len(messages), 5)
             values = sorted(json.loads(m.data)["value"] for _s, _c, m in messages)
             self.assertEqual(values, [0.0, 2.5, 5.0, 7.5, 10.0])
+
+    def test_negative_header_timestamp_falls_back_to_frame_time(self):
+        # Some real records carry a negative sentinel in
+        # header.data_timestamp.ns.m_value (e.g. "no timestamp set"), which
+        # can't be packed as MCAP's unsigned 64-bit timestamp. That should
+        # fall back to frame.time rather than raising.
+        record = {"header": {"data_timestamp": {"ns": {"m_value": -1}}}}
+        self.assertEqual(_extract_timestamp_ns(record, 1781767357.0), 1781767357_000000000)
+
+    def test_valid_header_timestamp_is_used(self):
+        record = {"header": {"data_timestamp": {"ns": {"m_value": T0_NS}}}}
+        self.assertEqual(_extract_timestamp_ns(record, 0.0), T0_NS)
+
+    def test_no_valid_timestamp_raises(self):
+        with self.assertRaises(ValueError):
+            _extract_timestamp_ns({}, -1.0)
 
 
 if __name__ == "__main__":

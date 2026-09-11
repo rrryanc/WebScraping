@@ -84,15 +84,30 @@ def _record_to_dict(record) -> dict:
     return {name: _jsonify(record[name]) for name in record.dtype.names}
 
 
+_MAX_U64 = (1 << 64) - 1
+
+
+def _is_valid_ns(value) -> bool:
+    """MCAP timestamps are packed as unsigned 64-bit integers; some records
+    carry a negative or otherwise out-of-range sentinel in
+    header.data_timestamp.ns.m_value (e.g. "no timestamp set")."""
+    return isinstance(value, (int, float)) and 0 <= value <= _MAX_U64
+
+
 def _extract_timestamp_ns(record_dict: dict, frame_time_sec: float) -> int:
     header = record_dict.get("header")
     if isinstance(header, dict):
         ts = header.get("data_timestamp")
         if isinstance(ts, dict):
             ns = ts.get("ns")
-            if isinstance(ns, dict) and ns.get("m_value"):
-                return int(ns["m_value"])
-    return int(round(frame_time_sec * 1_000_000_000))
+            if isinstance(ns, dict):
+                value = ns.get("m_value")
+                if value and _is_valid_ns(value):
+                    return int(value)
+    fallback_ns = round(frame_time_sec * 1_000_000_000)
+    if not _is_valid_ns(fallback_ns):
+        raise ValueError(f"no valid timestamp available (frame_time_sec={frame_time_sec!r})")
+    return int(fallback_ns)
 
 
 def find_signal_groups(h5file: h5py.File) -> list[str]:
