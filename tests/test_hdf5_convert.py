@@ -206,6 +206,38 @@ class TestHdf5Convert(unittest.TestCase):
             values = sorted(json.loads(m.data)["value"] for _s, _c, m in messages)
             self.assertEqual(values, [0.0, 1.0])
 
+    def test_reads_zstandard_compressed_signals(self):
+        # Real recordings use Zstandard (a third-party HDF5 filter, id 32015)
+        # compression; hdf5_convert must import hdf5plugin so h5py can decode
+        # it, otherwise every read fails with an obscure "can't open
+        # directory" OSError regardless of which record is requested.
+        import hdf5plugin
+
+        simple_dtype = np.dtype([("value", "<f8")])
+        frame_dtype = np.dtype([("time", "<f8"), ("index", "<u4"), ("msg_seq_number", "<i8")])
+        n = 5
+        data = np.zeros(n, dtype=simple_dtype)
+        frame = np.zeros(n, dtype=frame_dtype)
+        for i in range(n):
+            data[i]["value"] = i * 2.5
+            frame[i]["time"] = 1781767357.0 + i
+
+        zstd_path = self.tmpdir / "zstd.h5"
+        with h5py.File(zstd_path, "w") as f:
+            grp = f.create_group("aos/activities/compressed_activity/outputs/compressed_signal")
+            grp.create_dataset("data", data=data, chunks=(1,), **hdf5plugin.Zstd())
+            grp.create_dataset("frame", data=frame)
+
+        convert(zstd_path, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            messages = list(
+                reader.iter_messages(topics=["/aos/activities/compressed_activity/outputs/compressed_signal"])
+            )
+            self.assertEqual(len(messages), 5)
+            values = sorted(json.loads(m.data)["value"] for _s, _c, m in messages)
+            self.assertEqual(values, [0.0, 2.5, 5.0, 7.5, 10.0])
+
 
 if __name__ == "__main__":
     unittest.main()

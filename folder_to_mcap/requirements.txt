@@ -5,3 +5,4 @@ numpy>=1.24
 Pillow>=10.0
 pypcd4>=1.0
 h5py>=3.8
+hdf5plugin>=4.0

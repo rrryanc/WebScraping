@@ -44,6 +44,15 @@ from mcap.writer import CompressionType, Writer
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger("hdf5_to_mcap")
 
+try:
+    import hdf5plugin  # noqa: F401  (importing registers third-party filters, e.g. Zstandard)
+except ImportError:
+    log.warning(
+        "hdf5plugin is not installed; datasets compressed with third-party filters "
+        "(e.g. Zstandard) will fail to read with an obscure 'can't open directory' "
+        "OSError. Install with: pip install hdf5plugin"
+    )
+
 
 def _jsonify(value):
     """Recursively convert a numpy scalar/array/structured value into a
