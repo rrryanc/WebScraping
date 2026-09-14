@@ -254,6 +254,71 @@ class TestHdf5Convert(unittest.TestCase):
         with self.assertRaises(ValueError):
             _extract_timestamp_ns({}, -1.0)
 
+    def test_splits_epoch_time_messages_into_separate_output(self):
+        # A signal with no header, so every record falls back to frame.time.
+        # Some records have a real 2026-era frame.time, others have a
+        # placeholder frame.time of 0 (genuine epoch, 1970) -- those should
+        # land in the epoch output file instead of the main one.
+        simple_dtype = np.dtype([("value", "<f8")])
+        frame_dtype = np.dtype([("time", "<f8"), ("index", "<u4"), ("msg_seq_number", "<i8")])
+        n = 4
+        data = np.zeros(n, dtype=simple_dtype)
+        frame = np.zeros(n, dtype=frame_dtype)
+        real_times = [1781767357.0, 0.0, 1781767358.0, 0.0]
+        for i in range(n):
+            data[i]["value"] = float(i)
+            frame[i]["time"] = real_times[i]
+
+        mixed_path = self.tmpdir / "mixed.h5"
+        with h5py.File(mixed_path, "w") as f:
+            grp = f.create_group("aos/activities/mixed/outputs/signal")
+            grp.create_dataset("data", data=data)
+            grp.create_dataset("frame", data=frame)
+
+        epoch_output_path = self.tmpdir / "epoch.mcap"
+        convert(mixed_path, self.output_path, epoch_output_path=epoch_output_path)
+
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            main_values = sorted(
+                json.loads(m.data)["value"]
+                for _s, _c, m in reader.iter_messages(topics=["/aos/activities/mixed/outputs/signal"])
+            )
+        with open(epoch_output_path, "rb") as f:
+            reader = make_reader(f)
+            epoch_values = sorted(
+                json.loads(m.data)["value"]
+                for _s, _c, m in reader.iter_messages(topics=["/aos/activities/mixed/outputs/signal"])
+            )
+
+        self.assertEqual(main_values, [0.0, 2.0])
+        self.assertEqual(epoch_values, [1.0, 3.0])
+
+    def test_without_epoch_output_everything_goes_to_main_file(self):
+        # Default behavior (no --epoch-output) is unchanged: epoch-time
+        # records stay in the main file rather than being dropped.
+        simple_dtype = np.dtype([("value", "<f8")])
+        frame_dtype = np.dtype([("time", "<f8"), ("index", "<u4"), ("msg_seq_number", "<i8")])
+        data = np.zeros(1, dtype=simple_dtype)
+        frame = np.zeros(1, dtype=frame_dtype)
+        data[0]["value"] = 42.0
+        frame[0]["time"] = 0.0
+
+        epoch_path = self.tmpdir / "epoch_only.h5"
+        with h5py.File(epoch_path, "w") as f:
+            grp = f.create_group("aos/activities/mixed/outputs/signal")
+            grp.create_dataset("data", data=data)
+            grp.create_dataset("frame", data=frame)
+
+        convert(epoch_path, self.output_path)
+        with open(self.output_path, "rb") as f:
+            reader = make_reader(f)
+            values = [
+                json.loads(m.data)["value"]
+                for _s, _c, m in reader.iter_messages(topics=["/aos/activities/mixed/outputs/signal"])
+            ]
+        self.assertEqual(values, [42.0])
+
 
 if __name__ == "__main__":
     unittest.main()
